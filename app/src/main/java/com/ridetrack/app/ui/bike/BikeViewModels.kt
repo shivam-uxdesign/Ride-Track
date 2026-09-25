@@ -1,0 +1,127 @@
+package com.ridetrack.app.ui.bike
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.ridetrack.app.AppContainer
+import com.ridetrack.telemetry.model.Bike
+import com.ridetrack.telemetry.model.FuelType
+import com.ridetrack.telemetry.model.MountOrientation
+import com.ridetrack.telemetry.model.SensorAvailability
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import java.util.UUID
+
+data class BikesUiState(
+    val loading: Boolean = true,
+    val bikes: List<Bike> = emptyList(),
+    val selectedId: String? = null,
+    val sensors: SensorAvailability = SensorAvailability(false, false, false),
+    val hasGps: Boolean = false,
+    val message: String? = null,
+)
+
+class BikesViewModel(private val c: AppContainer) : ViewModel() {
+    private val message = MutableStateFlow<String?>(null)
+
+    val state: StateFlow<BikesUiState> = combine(c.bikes.observeBikes(), c.settings.settings, message) { bikes, settings, msg ->
+        BikesUiState(
+            loading = false,
+            bikes = bikes,
+            selectedId = bikes.firstOrNull { it.id == settings.selectedBikeId }?.id ?: bikes.firstOrNull()?.id,
+            sensors = c.sensorInventory.availability(),
+            hasGps = c.sensorInventory.hasGpsHardware(),
+            message = msg,
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BikesUiState())
+
+    fun select(id: String) {
+        viewModelScope.launch { c.settings.setSelectedBike(id) }
+    }
+
+    fun delete(id: String) {
+        viewModelScope.launch {
+            if (!c.bikes.deleteIfUnused(id)) {
+                message.value = "This bike has recorded rides, so it can't be deleted."
+            }
+        }
+    }
+
+    fun dismissMessage() {
+        message.value = null
+    }
+}
+
+data class BikeForm(
+    val make: String = "",
+    val model: String = "",
+    val year: String = "",
+    val displacementCc: String = "",
+    val weightKg: String = "",
+    val fuelType: FuelType = FuelType.PETROL,
+    val mountOrientation: MountOrientation = MountOrientation.PORTRAIT,
+) {
+    val yearError: Boolean get() = year.isNotBlank() && (year.toIntOrNull() ?: 0) !in 1900..2100
+    val ccError: Boolean get() = displacementCc.isNotBlank() && (displacementCc.toIntOrNull() ?: 0) !in 1..5000
+    val weightError: Boolean get() = weightKg.isNotBlank() && (weightKg.toIntOrNull() ?: 0) !in 1..2000
+    val isValid: Boolean get() = (make.isNotBlank() || model.isNotBlank()) && !yearError && !ccError && !weightError
+}
+
+class BikeEditViewModel(private val c: AppContainer, private val bikeId: String?) : ViewModel() {
+    private val _form = MutableStateFlow(BikeForm())
+    val form: StateFlow<BikeForm> = _form.asStateFlow()
+    private var existing: Bike? = null
+    val isNew: Boolean = bikeId == null
+
+    init {
+        if (bikeId != null) {
+            viewModelScope.launch {
+                c.bikes.get(bikeId)?.let { b ->
+                    existing = b
+                    _form.value = BikeForm(
+                        make = b.make,
+                        model = b.model,
+                        year = b.year?.toString().orEmpty(),
+                        displacementCc = b.displacementCc?.toString().orEmpty(),
+                        weightKg = b.weightKg?.toString().orEmpty(),
+                        fuelType = b.fuelType,
+                        mountOrientation = b.mountOrientation,
+                    )
+                }
+            }
+        }
+    }
+
+    fun update(f: (BikeForm) -> BikeForm) = _form.update(f)
+
+    /** Saves and returns the bike id, or null if the form is invalid. */
+    fun save(onSaved: (String) -> Unit) {
+        val f = _form.value
+        if (!f.isValid) return
+        val prev = existing
+        val bike = Bike(
+            id = prev?.id ?: UUID.randomUUID().toString(),
+            make = f.make.trim(),
+            model = f.model.trim(),
+            year = f.year.toIntOrNull(),
+            displacementCc = f.displacementCc.toIntOrNull(),
+            weightKg = f.weightKg.toIntOrNull(),
+            fuelType = f.fuelType,
+            mountOrientation = f.mountOrientation,
+            calibration = prev?.calibration.takeIf { prev?.mountOrientation == f.mountOrientation },
+            createdAtMillis = prev?.createdAtMillis ?: System.currentTimeMillis(),
+        )
+        viewModelScope.launch {
+            c.bikes.save(bike)
+            val selected = c.settings.settings.first().selectedBikeId
+            if (selected == null || prev == null) c.settings.setSelectedBike(bike.id)
+            onSaved(bike.id)
+        }
+    }
+}
