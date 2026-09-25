@@ -3,7 +3,7 @@ package com.ridetrack.app.ui.common
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.TrendingDown
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
-import androidx.compose.material.icons.outlined.AltRoute
+import androidx.compose.material.icons.automirrored.outlined.AltRoute
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.GpsFixed
 import androidx.compose.material.icons.outlined.GpsOff
@@ -47,7 +47,7 @@ fun RideEvent.presentation(): EventPresentation {
         RideEventType.RIGHT_TURN -> EventPresentation("Right turn", value?.let { "${abs(it).roundToInt()}°" }, Icons.Outlined.TurnRight, RtColors.Right)
         RideEventType.SHARP_DIRECTION_CHANGE -> EventPresentation(
             "Sharp direction change", listOfNotNull(value?.let { "${abs(it).roundToInt()}°" }, speed).joinToString(" · "),
-            Icons.Outlined.AltRoute, RtColors.Warning,
+            Icons.AutoMirrored.Outlined.AltRoute, RtColors.Warning,
         )
         RideEventType.GPS_SIGNAL_LOST -> EventPresentation("GPS signal lost", null, Icons.Outlined.GpsOff, RtColors.Warning)
         RideEventType.GPS_SIGNAL_RESTORED -> EventPresentation("GPS signal restored", null, Icons.Outlined.GpsFixed, RtColors.TextSecondary)
