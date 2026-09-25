@@ -1,5 +1,6 @@
 package com.ridetrack.app.ui.profile
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -16,7 +17,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.QueryStats
+import androidx.compose.material3.Icon
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -48,7 +51,7 @@ import com.ridetrack.app.ui.theme.RtType
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ProfileScreen() {
+fun ProfileScreen(onOpenHudSettings: () -> Unit) {
     val vm = appViewModel { ProfileViewModel(it) }
     val s by vm.state.collectAsStateWithLifecycle()
 
@@ -106,6 +109,24 @@ fun ProfileScreen() {
             )
             Line()
             ToggleRow("G-force indicator", "Show the G-force dot on the live ride screen.", s.settings.showGForceIndicator, vm::setGIndicator)
+            Line()
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onOpenHudSettings)
+                    .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Pop-up HUD", style = RtType.bodyStrong, color = RtColors.TextPrimary)
+                    Text(
+                        if (s.settings.hud.enabled) "On · ${s.settings.hud.layout.label}" else "Off",
+                        style = RtType.caption,
+                        color = RtColors.TextSecondary,
+                    )
+                }
+                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = RtColors.TextSecondary)
+            }
             Line()
             Spacer(Modifier.height(RtDimens.sm))
             Label("Live ride metrics")

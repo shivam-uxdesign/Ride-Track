@@ -40,6 +40,7 @@ import com.ridetrack.app.ui.bike.CalibrationScreen
 import com.ridetrack.app.ui.detail.ReplayScreen
 import com.ridetrack.app.ui.detail.RideDetailScreen
 import com.ridetrack.app.ui.home.HomeScreen
+import com.ridetrack.app.ui.hud.HudSettingsScreen
 import com.ridetrack.app.ui.live.LiveRideScreen
 import com.ridetrack.app.ui.preride.PreRideScreen
 import com.ridetrack.app.ui.profile.ProfileScreen
@@ -60,6 +61,7 @@ object Routes {
     const val REPLAY = "replay/{rideId}"
     const val BIKE_EDIT = "bike/edit?bikeId={bikeId}"
     const val CALIBRATE = "calibrate/{bikeId}"
+    const val HUD_SETTINGS = "hud-settings"
 
     fun summary(id: String) = "summary/$id"
     fun detail(id: String) = "ride/$id"
@@ -128,7 +130,8 @@ fun RideTrackNavHost() {
                         onCalibrate = { nav.navigate(Routes.calibrate(it)) },
                     )
                 }
-                composable(Routes.PROFILE) { ProfileScreen() }
+                composable(Routes.PROFILE) { ProfileScreen(onOpenHudSettings = { nav.navigate(Routes.HUD_SETTINGS) }) }
+                composable(Routes.HUD_SETTINGS) { HudSettingsScreen(onBack = { nav.popBackStack() }) }
                 composable(Routes.PRE_RIDE) {
                     PreRideScreen(
                         onBack = { nav.popBackStack() },

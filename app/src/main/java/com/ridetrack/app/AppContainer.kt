@@ -5,6 +5,7 @@ import com.ridetrack.app.data.BikeRepository
 import com.ridetrack.app.data.RideRepository
 import com.ridetrack.app.data.SettingsRepository
 import com.ridetrack.app.data.db.RideTrackDatabase
+import com.ridetrack.app.hud.HudController
 import com.ridetrack.app.ride.RideSessionManager
 import com.ridetrack.app.sensors.BatteryMonitor
 import com.ridetrack.app.sensors.PhoneTelemetrySource
@@ -34,4 +35,6 @@ class AppContainer(context: Context) {
         phoneSource = { phoneSource() },
         scope = appScope,
     )
+
+    val hud = HudController(appContext, session, settings)
 }

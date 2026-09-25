@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 data class LiveChrome(
     val rideState: RideState = RideState.Idle,
@@ -20,6 +21,8 @@ data class LiveChrome(
     val showGIndicator: Boolean = true,
     val autoPause: Boolean = true,
     val battery: BatteryState? = null,
+    val hudEnabled: Boolean = false,
+    val hudPromptDismissed: Boolean = true,
 )
 
 class LiveRideViewModel(private val c: AppContainer) : ViewModel() {
@@ -37,6 +40,8 @@ class LiveRideViewModel(private val c: AppContainer) : ViewModel() {
             showGIndicator = settings.showGForceIndicator,
             autoPause = settings.autoPause,
             battery = battery,
+            hudEnabled = settings.hud.enabled,
+            hudPromptDismissed = settings.hud.promptDismissed,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LiveChrome(rideState = c.session.state.value, active = c.session.active.value))
 
@@ -47,4 +52,8 @@ class LiveRideViewModel(private val c: AppContainer) : ViewModel() {
     fun cancelEnd() = c.session.cancelEnd()
     fun confirmEnd() = c.session.confirmEnd()
     fun acknowledge() = c.session.acknowledge()
+
+    fun dismissHudPrompt() {
+        viewModelScope.launch { c.settings.setHudPromptDismissed(true) }
+    }
 }

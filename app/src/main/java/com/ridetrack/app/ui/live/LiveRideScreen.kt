@@ -24,12 +24,18 @@ import androidx.compose.material.icons.outlined.GpsOff
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -39,7 +45,10 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ridetrack.app.hud.OverlayPermission
 import com.ridetrack.app.data.LiveMetric
 import com.ridetrack.app.ui.appViewModel
 import com.ridetrack.app.ui.components.Chip
@@ -144,6 +153,51 @@ fun LiveRideScreen(onRideSaved: (String) -> Unit, onExit: () -> Unit) {
         )
     }
     if (state is RideState.Saving) SavingOverlay()
+
+    // Explain the pop-up once, the first time a ride runs without the overlay permission.
+    val context = LocalContext.current
+    var overlayGranted by remember { mutableStateOf(OverlayPermission.isGranted(context)) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { overlayGranted = OverlayPermission.isGranted(context) }
+    if ((state is RideState.Recording || state is RideState.Paused) && chrome.hudEnabled && !chrome.hudPromptDismissed && !overlayGranted) {
+        HudPermissionSheet(
+            onContinue = { OverlayPermission.request(context) },
+            onNotNow = vm::dismissHudPrompt,
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HudPermissionSheet(onContinue: () -> Unit, onNotNow: () -> Unit) {
+    ModalBottomSheet(
+        onDismissRequest = onNotNow,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = RtColors.SurfaceRaised,
+    ) {
+        Column(
+            Modifier
+                .padding(horizontal = 20.dp)
+                .navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(RtDimens.md),
+        ) {
+            Text("Keep your ride data visible in other apps", style = RtType.headline, color = RtColors.TextPrimary)
+            Text(
+                "When you switch to navigation or music during a ride, a small pop-up shows your speed and lean. " +
+                    "It hides again when you come back to Ride Track.",
+                style = RtType.body,
+                color = RtColors.TextSecondary,
+            )
+            Text(
+                "Android calls this \"Display over other apps\". Turn it on in the next screen, then press Back.",
+                style = RtType.body,
+                color = RtColors.TextSecondary,
+            )
+            PrimaryButton("Continue", onContinue, large = true)
+            TextButton(onClick = onNotNow, modifier = Modifier.fillMaxWidth().padding(bottom = RtDimens.md)) {
+                Text("NOT NOW", style = RtType.button, color = RtColors.TextSecondary)
+            }
+        }
+    }
 }
 
 @Composable
