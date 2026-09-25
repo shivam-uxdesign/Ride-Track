@@ -1,5 +1,6 @@
 package com.ridetrack.app.ride
 
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.PendingIntent
 import android.content.Context
@@ -70,6 +71,8 @@ class RideRecordingService : LifecycleService() {
         false
     }
 
+    // Notification permission is checked via Permissions.hasNotifications before notify().
+    @SuppressLint("MissingPermission")
     private fun observe(session: RideSessionManager) {
         lifecycleScope.launch {
             session.state.collectLatest { if (!it.isActive && it !is RideState.Saving) shutdown() }

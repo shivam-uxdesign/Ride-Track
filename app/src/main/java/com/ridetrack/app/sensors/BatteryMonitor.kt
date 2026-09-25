@@ -17,7 +17,9 @@ data class BatteryState(val percent: Int, val charging: Boolean) {
 
 class BatteryMonitor(private val context: Context) {
     fun current(): BatteryState? =
-        context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))?.toBatteryState()
+        ContextCompat.registerReceiver(
+            context, null, IntentFilter(Intent.ACTION_BATTERY_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED,
+        )?.toBatteryState()
 
     fun observe(): Flow<BatteryState> = callbackFlow {
         val receiver = object : BroadcastReceiver() {
