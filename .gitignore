@@ -11,3 +11,6 @@ captures/
 *.aab
 *.jks
 *.keystore
+
+# The shared debug signing key is intentionally tracked (debug builds only).
+!app/signing/debug.keystore

@@ -31,6 +31,17 @@ android {
         }
     }
 
+    signingConfigs {
+        // A fixed debug key shared by local and CI builds, so a new test APK installs over the
+        // previous one and keeps the rider's data. Debug-only; never use it for a store release.
+        getByName("debug") {
+            storeFile = file("signing/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
