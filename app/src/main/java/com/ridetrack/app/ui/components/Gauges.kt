@@ -32,8 +32,8 @@ fun leanColor(deg: Double?) = when (Format.leanSide(deg)) {
 }
 
 /**
- * Upper half-circle lean gauge (±60°). The arc fills from centre toward the lean side.
- * Hidden needle when lean is unavailable.
+ * Thin upper-arc lean gauge (±60°): a hairline track, a coloured arc from upright toward
+ * the lean side and a knob at the current angle. Max-lean marks are faint ticks.
  */
 @Composable
 fun LeanArc(leanDeg: Double?, modifier: Modifier = Modifier, maxLeft: Double? = null, maxRight: Double? = null) {
@@ -46,41 +46,34 @@ fun LeanArc(leanDeg: Double?, modifier: Modifier = Modifier, maxLeft: Double? = 
     Canvas(
         modifier
             .fillMaxWidth()
-            .aspectRatio(2.6f)
+            .aspectRatio(2.7f)
             .semantics { contentDescription = "Lean ${Format.lean(leanDeg)}" },
     ) {
-        val stroke = 6.dp.toPx()
-        val radius = minOf(size.width / 2f, size.height) - stroke
-        val center = Offset(size.width / 2f, size.height - stroke / 2)
+        val stroke = 3.dp.toPx()
+        val knob = 6.dp.toPx()
+        val radius = minOf(size.width / 2f, size.height) - knob
+        val center = Offset(size.width / 2f, radius + knob)
         val topLeft = Offset(center.x - radius, center.y - radius)
         val arcSize = Size(radius * 2, radius * 2)
-        // Track covers -60°..+60° around vertical: 210°..330° in canvas angles.
         drawArc(RtColors.Outline, startAngle = 210f, sweepAngle = 120f, useCenter = false, topLeft = topLeft, size = arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
-        fun tick(deg: Double, tickColor: androidx.compose.ui.graphics.Color) {
+        fun point(deg: Double, r: Float): Offset {
             val a = Math.toRadians(270.0 + deg)
-            val inner = radius - 14.dp.toPx()
-            drawLine(
-                tickColor,
-                Offset(center.x + (inner * cos(a)).toFloat(), center.y + (inner * sin(a)).toFloat()),
-                Offset(center.x + (radius * cos(a)).toFloat(), center.y + (radius * sin(a)).toFloat()),
-                strokeWidth = 2.dp.toPx(),
-                cap = StrokeCap.Round,
-            )
+            return Offset(center.x + (r * cos(a)).toFloat(), center.y + (r * sin(a)).toFloat())
         }
-        maxLeft?.let { tick(-it.coerceAtMost(60.0), RtColors.Left.copy(alpha = 0.7f)) }
-        maxRight?.let { tick(it.coerceAtMost(60.0), RtColors.Right.copy(alpha = 0.7f)) }
+        fun mark(deg: Double, c: androidx.compose.ui.graphics.Color) {
+            drawLine(c, point(deg, radius - 9.dp.toPx()), point(deg, radius + 3.dp.toPx()), strokeWidth = 1.5.dp.toPx(), cap = StrokeCap.Round)
+        }
+        mark(0.0, RtColors.TextTertiary)
+        maxLeft?.let { mark(-it.coerceAtMost(60.0), RtColors.Left.copy(alpha = 0.6f)) }
+        maxRight?.let { mark(it.coerceAtMost(60.0), RtColors.Right.copy(alpha = 0.6f)) }
         if (leanDeg != null) {
             drawArc(color, startAngle = 270f, sweepAngle = animated, useCenter = false, topLeft = topLeft, size = arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
-            val a = Math.toRadians(270.0 + animated)
-            drawCircle(color, radius = 7.dp.toPx(), center = Offset(center.x + (radius * cos(a)).toFloat(), center.y + (radius * sin(a)).toFloat()))
+            drawCircle(color, radius = knob, center = point(animated.toDouble(), radius))
         }
     }
 }
 
-/**
- * Friction-circle style G indicator: braking up, acceleration down, cornering left/right.
- * The outer ring is 1 G.
- */
+/** Friction-circle G indicator: braking up, acceleration down, cornering left/right. */
 @Composable
 fun GForceIndicator(longitudinalG: Double?, lateralG: Double?, modifier: Modifier = Modifier) {
     val x by animateFloatAsState((lateralG ?: 0.0).toFloat().coerceIn(-1f, 1f), tween(150), label = "gx")
@@ -95,24 +88,19 @@ fun GForceIndicator(longitudinalG: Double?, lateralG: Double?, modifier: Modifie
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .padding(18.dp),
+                .padding(16.dp),
         ) {
             val r = size.minDimension / 2f
             val c = center
-            drawCircle(RtColors.Outline, radius = r, center = c, style = Stroke(1.5.dp.toPx()))
-            drawCircle(RtColors.Outline.copy(alpha = 0.6f), radius = r / 2f, center = c, style = Stroke(1.dp.toPx()))
-            drawLine(RtColors.Outline, Offset(c.x - r, c.y), Offset(c.x + r, c.y), 1.dp.toPx())
-            drawLine(RtColors.Outline, Offset(c.x, c.y - r), Offset(c.x, c.y + r), 1.dp.toPx())
+            drawCircle(RtColors.Outline, radius = r, center = c, style = Stroke(1.dp.toPx()))
+            drawCircle(RtColors.Outline, radius = r / 2f, center = c, style = Stroke(1.dp.toPx()))
             if (available) {
-                // Braking (negative longitudinal) moves the dot up; acceleration down.
                 val dot = Offset(c.x + x * r, c.y + y * r)
-                drawCircle(RtColors.GForce.copy(alpha = 0.25f), radius = 14.dp.toPx(), center = dot)
-                drawCircle(RtColors.GForce, radius = 7.dp.toPx(), center = dot)
+                drawCircle(RtColors.GForce.copy(alpha = 0.2f), radius = 12.dp.toPx(), center = dot)
+                drawCircle(RtColors.GForce, radius = 5.dp.toPx(), center = dot)
             }
         }
         Text("BRAKE", style = RtType.label, color = RtColors.TextTertiary, modifier = Modifier.align(Alignment.TopCenter))
         Text("ACCEL", style = RtType.label, color = RtColors.TextTertiary, modifier = Modifier.align(Alignment.BottomCenter))
-        Text("L", style = RtType.label, color = RtColors.TextTertiary, modifier = Modifier.align(Alignment.CenterStart))
-        Text("R", style = RtType.label, color = RtColors.TextTertiary, modifier = Modifier.align(Alignment.CenterEnd))
     }
 }

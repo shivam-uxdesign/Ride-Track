@@ -1,99 +1,230 @@
 package com.ridetrack.app.ui.summary
 
+import android.content.Context
+import android.content.Intent
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.IosShare
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ridetrack.app.ui.appViewModel
-import com.ridetrack.app.ui.common.HeadlineStats
-import com.ridetrack.app.ui.common.Maneuvers
-import com.ridetrack.app.ui.common.RideDynamics
-import com.ridetrack.app.ui.common.TimeBreakdown
+import com.ridetrack.app.ui.components.AnimatedCheck
+import com.ridetrack.app.ui.components.CountUpText
 import com.ridetrack.app.ui.components.DemoBadge
 import com.ridetrack.app.ui.components.EmptyState
+import com.ridetrack.app.ui.components.HairlineDivider
+import com.ridetrack.app.ui.components.Label
 import com.ridetrack.app.ui.components.PrimaryButton
 import com.ridetrack.app.ui.components.RouteMap
-import com.ridetrack.app.ui.components.SecondaryButton
-import com.ridetrack.app.ui.components.SectionHeader
+import com.ridetrack.app.ui.components.Stat
+import com.ridetrack.app.ui.components.StatRow
+import com.ridetrack.app.ui.components.riseIn
 import com.ridetrack.app.ui.format.Format
 import com.ridetrack.app.ui.theme.RtColors
 import com.ridetrack.app.ui.theme.RtDimens
 import com.ridetrack.app.ui.theme.RtType
+import com.ridetrack.app.ui.theme.pressScale
 import com.ridetrack.telemetry.model.DataSourceKind
+import com.ridetrack.telemetry.model.Ride
 
 @Composable
 fun RideSummaryScreen(rideId: String, onDone: () -> Unit, onOpenDetail: () -> Unit) {
     val vm = appViewModel(key = "summary-$rideId") { RideSummaryViewModel(it, rideId) }
     val s by vm.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     BackHandler(onBack = onDone)
-    val visible = remember { MutableTransitionState(false).apply { targetState = true } }
 
     Column(
         Modifier
             .fillMaxSize()
             .statusBarsPadding()
             .navigationBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = RtDimens.screenPadding),
+            .padding(horizontal = RtDimens.screenPaddingWide),
     ) {
         val ride = s.ride
-        Spacer(Modifier.height(RtDimens.lg))
-        Text("RIDE COMPLETE", style = RtType.label, color = RtColors.Primary)
-        Spacer(Modifier.height(RtDimens.xs))
+        Row(Modifier.fillMaxWidth().padding(top = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+            AnimatedCheck()
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Ride saved", style = RtType.bodyStrong, color = RtColors.Primary)
+                if (ride != null) Text(timeRange(ride), style = RtType.caption, color = RtColors.TextSecondary)
+            }
+            TextButton(onClick = onDone) { Text("Done", style = RtType.body, color = RtColors.TextPrimary) }
+        }
         if (ride == null) {
-            if (!s.loading) EmptyState("Ride not found", "This ride may have been deleted.", action = { PrimaryButton("Done", onDone) })
+            if (!s.loading) EmptyState("Ride not found", "This ride may have been deleted.")
             return@Column
         }
-        Text(ride.name, style = RtType.title, color = RtColors.TextPrimary)
-        Text(
-            listOfNotNull(Format.rideDate(ride.startTimeMillis), s.bikeName).joinToString(" · "),
-            style = RtType.caption,
-            color = RtColors.TextSecondary,
-        )
-        if (ride.source == DataSourceKind.DEMO) {
-            Spacer(Modifier.height(RtDimens.xs))
-            DemoBadge()
-        }
-        Spacer(Modifier.height(RtDimens.lg))
 
-        AnimatedVisibility(visible, enter = fadeIn(tween(400)) + slideInVertically(tween(400)) { it / 8 }) {
-            Column {
-                HeadlineStats(ride)
-                RideDynamics(ride)
-                Maneuvers(ride)
-                TimeBreakdown(ride)
-                SectionHeader("Map")
-                RouteMap(
-                    s.route,
-                    Modifier
-                        .fillMaxWidth()
-                        .height(240.dp),
+        Column(
+            Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Spacer(Modifier.height(26.dp))
+            Column(Modifier.riseIn(0)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(ride.name, style = RtType.title, color = RtColors.TextPrimary, modifier = Modifier.weight(1f, fill = false))
+                    if (ride.source == DataSourceKind.DEMO) {
+                        Spacer(Modifier.width(10.dp))
+                        DemoBadge()
+                    }
+                }
+                Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(top = 12.dp)) {
+                    CountUpText(ride.stats.distanceM / 1000.0, 1, RtType.display)
+                    Text(" km", style = RtType.headline, color = RtColors.TextSecondary, modifier = Modifier.padding(bottom = 10.dp))
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+            StatRow(
+                listOf(
+                    Stat("Time", Format.duration(ride.durationMillis)),
+                    Stat("Avg", Format.speedKmh(ride.stats.avgSpeedMps), "km/h"),
+                    Stat("Max", Format.speedKmh(ride.stats.maxSpeedMps), "km/h"),
+                ),
+                modifier = Modifier.riseIn(1),
+            )
+
+            Spacer(Modifier.height(26.dp))
+            RouteMap(
+                s.route,
+                Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
+                    .riseIn(2),
+                animateDraw = true,
+            )
+
+            Spacer(Modifier.height(26.dp))
+            Column(Modifier.riseIn(3)) {
+                Label("Ride dynamics")
+                Spacer(Modifier.height(6.dp))
+                DynamicsRow("Max lean") {
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(color = RtColors.Left)) { append(Format.lean(ride.stats.maxLeftLeanDeg?.let { -it })) }
+                        withStyle(SpanStyle(color = RtColors.TextTertiary)) { append("  ·  ") }
+                        withStyle(SpanStyle(color = RtColors.Right)) { append(Format.lean(ride.stats.maxRightLeanDeg)) }
+                    }
+                }
+                HairlineDivider()
+                DynamicsRow("Acceleration / braking") {
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(color = RtColors.Accel)) { append(Format.gSigned(ride.stats.maxAccelG)) }
+                        withStyle(SpanStyle(color = RtColors.TextTertiary)) { append("  /  ") }
+                        withStyle(SpanStyle(color = RtColors.Brake)) { append(Format.gSigned(ride.stats.maxBrakeG)) }
+                    }
+                }
+                HairlineDivider()
+                DynamicsRow("Turns · brakes · stops") {
+                    buildAnnotatedString {
+                        append("${ride.stats.leftTurns + ride.stats.rightTurns} · ${ride.stats.brakeEvents} · ${ride.stats.stopCount}")
+                    }
+                }
+                Text(
+                    "Lean and G-force are estimated from phone sensors and are not certified measurements.",
+                    style = RtType.caption,
+                    color = RtColors.TextTertiary,
+                    modifier = Modifier.padding(top = 10.dp),
                 )
             }
+            Spacer(Modifier.height(24.dp))
         }
-        Spacer(Modifier.height(RtDimens.lg))
-        PrimaryButton("Done", onDone, large = true)
-        Spacer(Modifier.height(RtDimens.sm))
-        SecondaryButton("View detailed analysis", onOpenDetail)
-        Spacer(Modifier.height(RtDimens.lg))
+
+        Row(Modifier.padding(vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            val interaction = remember { MutableInteractionSource() }
+            Box(
+                Modifier
+                    .size(RtDimens.buttonHeight + 4.dp)
+                    .pressScale(interaction)
+                    .clip(CircleShape)
+                    .background(RtColors.Surface)
+                    .border(1.dp, RtColors.Hairline, CircleShape)
+                    .clickable(interactionSource = interaction, indication = null, role = Role.Button) { shareRide(context, ride) }
+                    .semantics { contentDescription = "Share ride" },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Outlined.IosShare, contentDescription = null, tint = RtColors.TextPrimary, modifier = Modifier.size(20.dp))
+            }
+            Spacer(Modifier.width(10.dp))
+            PrimaryButton(
+                "View details", onOpenDetail,
+                modifier = Modifier.weight(1f),
+                large = true,
+                color = RtColors.Inverse,
+                contentColor = RtColors.OnInverse,
+            )
+        }
     }
+}
+
+@Composable
+private fun DynamicsRow(label: String, value: () -> androidx.compose.ui.text.AnnotatedString) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 13.dp)
+            .semantics(mergeDescendants = true) {},
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = RtType.body, color = RtColors.TextSecondary)
+        Text(value(), style = RtType.body.copy(fontFeatureSettings = "tnum"), color = RtColors.TextPrimary)
+    }
+}
+
+private fun timeRange(ride: Ride): String {
+    val end = ride.endTimeMillis
+    val start = Format.rideDate(ride.startTimeMillis)
+    return if (end != null) "$start – ${Format.timeOfDay(end)}" else start
+}
+
+private fun shareRide(context: Context, ride: Ride) {
+    val s = ride.stats
+    val text = buildString {
+        append("${ride.name}: ${Format.distance(s.distanceM)} in ${Format.duration(ride.durationMillis)}")
+        s.maxSpeedMps?.let { append(" · top ${Format.speedWithUnit(it)}") }
+        val lean = listOfNotNull(s.maxLeftLeanDeg, s.maxRightLeanDeg).maxOrNull()
+        if (lean != null) append(" · max lean ${lean.toInt()}°")
+        if (ride.source == DataSourceKind.DEMO) append(" (demo ride)")
+        append(" — recorded with Ride Track")
+    }
+    val intent = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
+    runCatching { context.startActivity(Intent.createChooser(intent, "Share ride")) }
 }

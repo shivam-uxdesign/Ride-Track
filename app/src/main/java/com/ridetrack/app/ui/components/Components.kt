@@ -1,15 +1,20 @@
 package com.ridetrack.app.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -19,51 +24,59 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.ridetrack.app.ui.format.Format
 import com.ridetrack.app.ui.theme.RtColors
 import com.ridetrack.app.ui.theme.RtDimens
 import com.ridetrack.app.ui.theme.RtType
+import com.ridetrack.app.ui.theme.pressScale
+import com.ridetrack.app.ui.theme.rememberHaptics
 
+/** Quiet surface with a hairline edge. Clickable cards scale slightly while pressed. */
 @Composable
 fun RtCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     contentPadding: PaddingValues = PaddingValues(RtDimens.cardPadding),
     color: Color = RtColors.Surface,
+    radius: Dp = RtDimens.cardRadius,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val shape = RoundedCornerShape(RtDimens.cardRadius)
-    if (onClick != null) {
-        Surface(onClick = onClick, modifier = modifier.fillMaxWidth(), shape = shape, color = color) {
-            Column(Modifier.padding(contentPadding), content = content)
-        }
-    } else {
-        Surface(modifier = modifier.fillMaxWidth(), shape = shape, color = color) {
-            Column(Modifier.padding(contentPadding), content = content)
-        }
-    }
+    val shape = RoundedCornerShape(radius)
+    val interaction = remember { MutableInteractionSource() }
+    var m = modifier.fillMaxWidth()
+    if (onClick != null) m = m.pressScale(interaction)
+    m = m
+        .clip(shape)
+        .background(color)
+        .border(1.dp, RtColors.Hairline, shape)
+    if (onClick != null) m = m.clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
+    Column(m.padding(contentPadding), content = content)
 }
 
+/**
+ * Pill button. Primary actions are cyan; pass [color]/[contentColor] for the inverse
+ * (white) or danger variants.
+ */
 @Composable
 fun PrimaryButton(
     text: String,
@@ -76,32 +89,14 @@ fun PrimaryButton(
     contentColor: Color = RtColors.OnPrimary,
     haptic: Boolean = false,
 ) {
-    val haptics = LocalHapticFeedback.current
-    Button(
-        onClick = {
-            if (haptic) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-            onClick()
-        },
-        enabled = enabled,
-        modifier = modifier
-            .fillMaxWidth()
-            .height(if (large) RtDimens.primaryButtonHeight else RtDimens.buttonHeight),
-        shape = RoundedCornerShape(if (large) 20.dp else 16.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = color,
-            contentColor = contentColor,
-            disabledContainerColor = RtColors.SurfaceRaised,
-            disabledContentColor = RtColors.TextTertiary,
-        ),
-    ) {
-        if (icon != null) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
-            Spacer(Modifier.width(RtDimens.xs))
-        }
-        Text(text.uppercase(), style = RtType.button)
-    }
+    PillButton(
+        text = text, onClick = onClick, modifier = modifier, enabled = enabled,
+        height = if (large) RtDimens.primaryButtonHeight else RtDimens.buttonHeight,
+        icon = icon, background = color, content = contentColor, border = null, haptic = haptic,
+    )
 }
 
+/** Quiet pill on a dark surface with a hairline edge. */
 @Composable
 fun SecondaryButton(
     text: String,
@@ -111,21 +106,51 @@ fun SecondaryButton(
     icon: ImageVector? = null,
     contentColor: Color = RtColors.TextPrimary,
 ) {
-    OutlinedButton(
-        onClick = onClick,
-        enabled = enabled,
+    PillButton(
+        text = text, onClick = onClick, modifier = modifier, enabled = enabled,
+        height = RtDimens.buttonHeight, icon = icon, background = RtColors.Surface,
+        content = contentColor, border = RtColors.Hairline, haptic = false,
+    )
+}
+
+@Composable
+private fun PillButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier,
+    enabled: Boolean,
+    height: Dp,
+    icon: ImageVector?,
+    background: Color,
+    content: Color,
+    border: Color?,
+    haptic: Boolean,
+) {
+    val haptics = rememberHaptics()
+    val interaction = remember { MutableInteractionSource() }
+    val shape = RoundedCornerShape(50)
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(RtDimens.buttonHeight),
-        shape = RoundedCornerShape(16.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, RtColors.Outline),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = contentColor, disabledContentColor = RtColors.TextTertiary),
+            .height(height)
+            .pressScale(interaction)
+            .clip(shape)
+            .background(if (enabled) background else RtColors.SurfaceRaised)
+            .then(if (border != null) Modifier.border(1.dp, border, shape) else Modifier)
+            .clickable(interactionSource = interaction, indication = null, enabled = enabled, role = Role.Button) {
+                if (haptic) haptics.confirm()
+                onClick()
+            }
+            .padding(horizontal = 20.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
+        val c = if (enabled) content else RtColors.TextTertiary
         if (icon != null) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(RtDimens.iconSize))
-            Spacer(Modifier.width(RtDimens.xs))
+            Icon(icon, contentDescription = null, tint = c, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(10.dp))
         }
-        Text(text.uppercase(), style = RtType.button.copy(fontSize = RtType.button.fontSize * 0.9f))
+        Text(text, style = RtType.button, color = c, maxLines = 1)
     }
 }
 
@@ -140,7 +165,7 @@ fun SectionHeader(text: String, modifier: Modifier = Modifier, trailing: @Compos
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = RtDimens.lg, bottom = RtDimens.sm),
+            .padding(top = RtDimens.lg, bottom = RtDimens.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -155,6 +180,9 @@ fun SectionHeader(text: String, modifier: Modifier = Modifier, trailing: @Compos
     }
 }
 
+@Composable
+fun HairlineDivider(modifier: Modifier = Modifier) = HorizontalDivider(modifier, thickness = 1.dp, color = RtColors.Hairline)
+
 /** A value with an optional unit, e.g. "24.6 km". */
 @Composable
 fun MetricValue(
@@ -166,7 +194,7 @@ fun MetricValue(
 ) {
     Row(modifier = modifier, verticalAlignment = Alignment.Bottom) {
         Text(value, style = style, color = color, maxLines = 1)
-        if (unit != null && value != com.ridetrack.app.ui.format.Format.DASH) {
+        if (unit != null && value != Format.DASH) {
             Spacer(Modifier.width(4.dp))
             Text(unit, style = RtType.unit, color = RtColors.TextSecondary, modifier = Modifier.padding(bottom = 3.dp), maxLines = 1)
         }
@@ -186,12 +214,12 @@ fun StatBlock(
 ) {
     Column(
         modifier = modifier.semantics(mergeDescendants = true) {
-            contentDescription = "$label ${value}${unit?.let { " $it" } ?: ""}"
+            contentDescription = "$label $value${unit?.let { " $it" } ?: ""}"
         },
         horizontalAlignment = horizontalAlignment,
     ) {
         Label(label)
-        Spacer(Modifier.height(RtDimens.xxs))
+        Spacer(Modifier.height(6.dp))
         MetricValue(value, unit, style, color)
     }
 }
@@ -201,6 +229,25 @@ fun StatBlock(
 fun StatTile(label: String, value: String, modifier: Modifier = Modifier, unit: String? = null, color: Color = RtColors.TextPrimary) {
     RtCard(modifier = modifier, contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp)) {
         StatBlock(label, value, unit = unit, color = color)
+    }
+}
+
+data class Stat(val label: String, val value: String, val unit: String? = null, val color: Color = RtColors.TextPrimary)
+
+/** Up to four stats in a row, separated by hairlines — no card chrome. */
+@Composable
+fun StatRow(stats: List<Stat>, modifier: Modifier = Modifier, style: TextStyle = RtType.metricM) {
+    Row(modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+        stats.forEachIndexed { i, s ->
+            if (i > 0) Box(Modifier.width(1.dp).fillMaxHeight().background(RtColors.Hairline))
+            StatBlock(
+                s.label, s.value,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = if (i == 0) 0.dp else 14.dp, end = 8.dp),
+                unit = s.unit, style = style, color = s.color,
+            )
+        }
     }
 }
 
@@ -226,15 +273,9 @@ fun StatusIndicator(label: String, status: String, level: StatusLevel, modifier:
         modifier = modifier.semantics(mergeDescendants = true) { contentDescription = "$label: $status" },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, style = RtType.caption, color = RtColors.TextSecondary)
-        Spacer(Modifier.width(RtDimens.xs))
-        Box(
-            Modifier
-                .size(8.dp)
-                .background(level.color, CircleShape),
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(status, style = RtType.caption.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium), color = RtColors.TextPrimary)
+        Box(Modifier.size(7.dp).background(level.color, CircleShape))
+        Spacer(Modifier.width(7.dp))
+        Text(if (label.isBlank()) status else "$label $status", style = RtType.caption, color = RtColors.TextSecondary)
     }
 }
 
@@ -242,16 +283,18 @@ fun StatusIndicator(label: String, status: String, level: StatusLevel, modifier:
 fun Chip(text: String, color: Color, modifier: Modifier = Modifier, icon: ImageVector? = null) {
     Row(
         modifier = modifier
-            .background(color.copy(alpha = 0.14f), RoundedCornerShape(50))
-            .border(1.dp, color.copy(alpha = 0.35f), RoundedCornerShape(50))
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+            .background(RtColors.Surface, RoundedCornerShape(50))
+            .border(1.dp, RtColors.Hairline, RoundedCornerShape(50))
+            .padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) {
             Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(14.dp))
-            Spacer(Modifier.width(4.dp))
+        } else {
+            Box(Modifier.size(7.dp).background(color, CircleShape))
         }
-        Text(text.uppercase(), style = RtType.label.copy(fontSize = RtType.label.fontSize * 0.9f), color = color, maxLines = 1)
+        Spacer(Modifier.width(7.dp))
+        Text(text, style = RtType.caption, color = RtColors.TextPrimary, maxLines = 1)
     }
 }
 
@@ -268,19 +311,24 @@ fun EmptyState(
     icon: ImageVector? = null,
     action: (@Composable () -> Unit)? = null,
 ) {
-    RtCard(modifier = modifier) {
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            if (icon != null) {
-                Icon(icon, contentDescription = null, tint = RtColors.TextSecondary, modifier = Modifier.size(32.dp))
-                Spacer(Modifier.height(RtDimens.sm))
+    Column(
+        modifier
+            .fillMaxWidth()
+            .padding(vertical = RtDimens.xl, horizontal = RtDimens.md),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        if (icon != null) {
+            Box(Modifier.size(56.dp).background(RtColors.Surface, CircleShape), contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription = null, tint = RtColors.TextSecondary, modifier = Modifier.size(26.dp))
             }
-            Text(title, style = RtType.bodyStrong, color = RtColors.TextPrimary, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(RtDimens.xs))
-            Text(message, style = RtType.body, color = RtColors.TextSecondary, textAlign = TextAlign.Center)
-            if (action != null) {
-                Spacer(Modifier.height(RtDimens.md))
-                action()
-            }
+            Spacer(Modifier.height(RtDimens.md))
+        }
+        Text(title, style = RtType.headline, color = RtColors.TextPrimary, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(RtDimens.xs))
+        Text(message, style = RtType.body, color = RtColors.TextSecondary, textAlign = TextAlign.Center)
+        if (action != null) {
+            Spacer(Modifier.height(RtDimens.lg))
+            action()
         }
     }
 }
@@ -297,19 +345,18 @@ fun ScreenHeader(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = RtDimens.xs, bottom = RtDimens.xs),
+            .padding(top = RtDimens.sm, bottom = RtDimens.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (onBack != null) {
-            IconButton(onClick = onBack) {
+            IconButton(onClick = onBack, modifier = Modifier.padding(end = 4.dp)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = RtColors.TextPrimary)
             }
-            Spacer(Modifier.width(RtDimens.xxs))
         }
         Column(Modifier.weight(1f)) {
             Text(
                 title,
-                style = RtType.title,
+                style = if (onBack != null) RtType.headline else RtType.title,
                 color = RtColors.TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -328,7 +375,7 @@ fun InfoRow(label: String, value: String, modifier: Modifier = Modifier, valueCo
     Row(
         modifier
             .fillMaxWidth()
-            .padding(vertical = 10.dp)
+            .padding(vertical = 13.dp)
             .semantics(mergeDescendants = true) {},
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -336,3 +383,6 @@ fun InfoRow(label: String, value: String, modifier: Modifier = Modifier, valueCo
         Text(value, style = RtType.body.copy(fontFeatureSettings = "tnum"), color = valueColor, textAlign = TextAlign.End)
     }
 }
+
+/** Retained for callers that want a thin border without a card. */
+val HairlineBorder = BorderStroke(1.dp, RtColors.Hairline)

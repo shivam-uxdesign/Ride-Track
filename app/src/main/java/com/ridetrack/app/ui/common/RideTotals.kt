@@ -16,6 +16,7 @@ data class RideTotals(
     val totalStops: Int,
     val distanceThisMonthM: Double,
     val ridesThisMonth: Int,
+    val movingThisMonthMillis: Long,
 ) {
     val averageRideM: Double? get() = if (rideCount > 0) distanceM / rideCount else null
 
@@ -33,6 +34,7 @@ data class RideTotals(
                 totalStops = real.sumOf { it.stats.stopCount },
                 distanceThisMonthM = thisMonth.sumOf { it.stats.distanceM },
                 ridesThisMonth = thisMonth.size,
+                movingThisMonthMillis = thisMonth.sumOf { it.stats.movingMillis },
             )
         }
     }

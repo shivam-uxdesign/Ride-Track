@@ -18,7 +18,7 @@ data class LiveChrome(
     val rideState: RideState = RideState.Idle,
     val active: ActiveRide? = null,
     val metrics: List<LiveMetric> = emptyList(),
-    val showGIndicator: Boolean = true,
+    val showGIndicator: Boolean = false,
     val autoPause: Boolean = true,
     val battery: BatteryState? = null,
     val hudEnabled: Boolean = false,
@@ -51,6 +51,12 @@ class LiveRideViewModel(private val c: AppContainer) : ViewModel() {
     fun requestEnd() = c.session.requestEnd()
     fun cancelEnd() = c.session.cancelEnd()
     fun confirmEnd() = c.session.confirmEnd()
+
+    /** Hold-to-end completed: the hold itself is the confirmation. */
+    fun endNow() {
+        c.session.requestEnd()
+        c.session.confirmEnd()
+    }
     fun acknowledge() = c.session.acknowledge()
 
     fun dismissHudPrompt() {

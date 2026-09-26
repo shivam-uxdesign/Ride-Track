@@ -8,30 +8,41 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
-/** Brand palette. Values tuned from the spec palette for contrast on near-black. */
+/**
+ * Premium Minimal palette: near-black canvas, one soft cyan accent, hairlines instead of
+ * heavy cards. Semantic colours only where they carry meaning (lean side, braking, G).
+ */
 object RtColors {
-    val Background = Color(0xFF000000)
-    val Surface = Color(0xFF1D1B20)
-    val SurfaceRaised = Color(0xFF26242A)
-    val Outline = Color(0xFF38363C)
-    val TextPrimary = Color(0xFFF5F5F7)
-    val TextSecondary = Color(0xFFA7A5AB)
-    val TextTertiary = Color(0xFF77757B)
+    val Background = Color(0xFF0A0A0B)
+    /** Live ride screen: pure black for maximum contrast and OLED power saving. */
+    val LiveBackground = Color(0xFF000000)
+    val Surface = Color(0xFF141416)
+    val SurfaceRaised = Color(0xFF1C1C1F)
+    /** Tracks, chart grids, inactive controls. */
+    val Outline = Color(0xFF2A2A2E)
+    /** 1dp dividers and card edges. */
+    val Hairline = Color(0x14FFFFFF)
+    val TextPrimary = Color(0xFFF4F4F5)
+    val TextSecondary = Color(0xFF8B8B93)
+    val TextTertiary = Color(0xFF5E5E66)
 
     val Primary = Color(0xFF69C8CB)
-    val OnPrimary = Color(0xFF00282A)
+    val OnPrimary = Color(0xFF04292A)
+    /** High-emphasis secondary action (e.g. "View details"). */
+    val Inverse = Color(0xFFF4F4F5)
+    val OnInverse = Color(0xFF0A0A0B)
 
-    /** Left lean / left-side telemetry; lightened from #625CE6 for text contrast. */
-    val Left = Color(0xFF8C87FF)
+    /** Left lean / left-side telemetry. */
+    val Left = Color(0xFFA5A1FF)
     /** Right lean / right-side telemetry. */
-    val Right = Color(0xFFFF2F5B)
-    val Accel = Color(0xFF32D65B)
-    val Brake = Color(0xFFFF2F5B)
-    val GForce = Color(0xFFFFAA00)
-    val Paused = Color(0xFF8C87FF)
-    val Warning = Color(0xFFFFAA00)
-    val Error = Color(0xFFFF2F5B)
-    val Ok = Color(0xFF32D65B)
+    val Right = Color(0xFFFB7185)
+    val Accel = Color(0xFF4ADE80)
+    val Brake = Color(0xFFFB7185)
+    val GForce = Color(0xFFFBBF24)
+    val Paused = Color(0xFFA5A1FF)
+    val Warning = Color(0xFFFBBF24)
+    val Error = Color(0xFFF43F5E)
+    val Ok = Color(0xFF4ADE80)
 }
 
 object RtDimens {
@@ -46,9 +57,11 @@ object RtDimens {
     val screenPadding = 16.dp
     val cardPadding = 20.dp
     val cardRadius = 24.dp
+    val heroRadius = 28.dp
     val cardSpacing = 12.dp
     val buttonHeight = 56.dp
     val primaryButtonHeight = 64.dp
+    val screenPaddingWide = 20.dp
     val iconSize = 20.dp
     val minTouch = 48.dp
 }
@@ -59,6 +72,8 @@ private val colorScheme = darkColorScheme(
     primaryContainer = Color(0xFF1E3E40),
     onPrimaryContainer = RtColors.Primary,
     secondary = RtColors.Left,
+    inverseSurface = RtColors.Inverse,
+    inverseOnSurface = RtColors.OnInverse,
     onSecondary = Color.Black,
     background = RtColors.Background,
     onBackground = RtColors.TextPrimary,

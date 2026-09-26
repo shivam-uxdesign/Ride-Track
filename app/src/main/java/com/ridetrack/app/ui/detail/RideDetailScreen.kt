@@ -1,7 +1,11 @@
 package com.ridetrack.app.ui.detail
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +18,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.MoreVert
@@ -21,10 +27,11 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -34,42 +41,46 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ridetrack.app.ui.appViewModel
 import com.ridetrack.app.ui.common.Maneuvers
 import com.ridetrack.app.ui.common.RideDynamics
+import com.ridetrack.app.ui.common.TimeBreakdown
 import com.ridetrack.app.ui.common.isTurn
 import com.ridetrack.app.ui.common.positionAt
 import com.ridetrack.app.ui.common.presentation
-import com.ridetrack.app.ui.components.ChartSeries
 import com.ridetrack.app.ui.components.DemoBadge
 import com.ridetrack.app.ui.components.EmptyState
-import com.ridetrack.app.ui.components.Label
+import com.ridetrack.app.ui.components.HairlineDivider
 import com.ridetrack.app.ui.components.LineChart
-import com.ridetrack.app.ui.components.PrimaryButton
 import com.ridetrack.app.ui.components.RouteMap
-import com.ridetrack.app.ui.components.RtCard
 import com.ridetrack.app.ui.components.ScreenHeader
+import com.ridetrack.app.ui.components.SecondaryButton
 import com.ridetrack.app.ui.components.SectionHeader
-import com.ridetrack.app.ui.components.StatBlock
-import com.ridetrack.app.ui.components.StatTile
-import com.ridetrack.app.ui.components.TwoColumn
+import com.ridetrack.app.ui.components.Shimmer
+import com.ridetrack.app.ui.components.Stat
+import com.ridetrack.app.ui.components.StatRow
 import com.ridetrack.app.ui.components.leanColor
 import com.ridetrack.app.ui.format.Format
 import com.ridetrack.app.ui.theme.RtColors
 import com.ridetrack.app.ui.theme.RtDimens
 import com.ridetrack.app.ui.theme.RtType
+import com.ridetrack.app.ui.theme.rememberHaptics
 import com.ridetrack.telemetry.model.DataSourceKind
-import com.ridetrack.telemetry.model.Ride
-import com.ridetrack.telemetry.model.TelemetrySample
+import kotlin.math.roundToInt
 
 @Composable
 fun RideDetailScreen(rideId: String, onBack: () -> Unit, onReplay: () -> Unit) {
     val vm = appViewModel(key = "detail-$rideId") { RideDetailViewModel(it, rideId) }
     val s by vm.state.collectAsStateWithLifecycle()
     val scrub by vm.scrub.collectAsStateWithLifecycle()
+    val chart by vm.chart.collectAsStateWithLifecycle()
+    val haptics = rememberHaptics()
     var menuOpen by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -81,13 +92,14 @@ fun RideDetailScreen(rideId: String, onBack: () -> Unit, onReplay: () -> Unit) {
             .fillMaxSize()
             .statusBarsPadding()
             .navigationBarsPadding()
-            .padding(horizontal = RtDimens.screenPadding),
+            .padding(horizontal = RtDimens.screenPaddingWide),
     ) {
         ScreenHeader(
             title = ride?.name ?: "Ride",
-            subtitle = ride?.let { listOfNotNull(Format.rideDate(it.startTimeMillis), s.bikeName).joinToString(" · ") },
+            subtitle = ride?.let { "${Format.distance(it.stats.distanceM)} · ${Format.duration(it.durationMillis)} · ${Format.rideDate(it.startTimeMillis)}" },
             onBack = onBack,
         ) {
+            if (ride?.source == DataSourceKind.DEMO) DemoBadge()
             if (ride != null) {
                 IconButton(onClick = { menuOpen = true }) {
                     Icon(Icons.Outlined.MoreVert, contentDescription = "Ride options", tint = RtColors.TextPrimary)
@@ -102,53 +114,92 @@ fun RideDetailScreen(rideId: String, onBack: () -> Unit, onReplay: () -> Unit) {
             if (!s.loading) EmptyState("Ride not found", "This ride may have been deleted.")
             return@Column
         }
+
+        val data = s.data
+        val samples = data?.samples.orEmpty()
+        val idx = scrub?.let { f -> (f * (samples.size - 1)).roundToInt().coerceIn(0, (samples.size - 1).coerceAtLeast(0)) }
+        val sample = idx?.let { samples.getOrNull(it) }
+
         Column(Modifier.verticalScroll(rememberScrollState())) {
-            if (ride.source == DataSourceKind.DEMO) {
-                DemoBadge(Modifier.padding(bottom = RtDimens.sm))
-            }
-            SummaryGrid(ride)
-
-            val data = s.data
-            SectionHeader("Map")
-            val samples = data?.samples.orEmpty()
-            val scrubSample = scrub?.let { f -> samples.getOrNull((f * (samples.size - 1)).toInt()) }
-            RouteMap(
-                route = data?.route.orEmpty(),
-                marker = scrubSample?.let { samples.positionAt(it.timeMillis) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(260.dp),
-            )
-            Spacer(Modifier.height(RtDimens.cardSpacing))
-            PrimaryButton("Play ride", onReplay, icon = Icons.Rounded.PlayArrow, enabled = (data?.route?.size ?: 0) >= 2)
-
-            SectionHeader("Telemetry")
+            Spacer(Modifier.height(RtDimens.xs))
+            // Map with the travelled part of the route highlighted.
             if (data == null) {
-                Text("Loading telemetry…", style = RtType.caption, color = RtColors.TextSecondary)
+                Shimmer(Modifier.fillMaxWidth().height(250.dp), radius = RtDimens.cardRadius)
+            } else {
+                Box {
+                    RouteMap(
+                        route = data.route,
+                        marker = sample?.let { samples.positionAt(it.timeMillis) },
+                        progress = idx?.let { data.routeCountAt.getOrNull(it) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(250.dp),
+                    )
+                    if (sample != null) {
+                        Text(
+                            Format.timeOfDay(sample.timeMillis),
+                            style = RtType.caption.copy(fontFeatureSettings = "tnum"),
+                            color = RtColors.TextPrimary,
+                            modifier = Modifier
+                                .padding(start = 12.dp, top = 12.dp)
+                                .background(RtColors.Background.copy(alpha = 0.75f), RoundedCornerShape(50))
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
+            StatRow(
+                listOf(
+                    Stat("Speed", Format.speedKmh(sample?.speedMps)),
+                    Stat("Lean", Format.lean(sample?.leanDeg), color = leanColor(sample?.leanDeg)),
+                    Stat("G", sample?.combinedG?.let { String.format(java.util.Locale.US, "%.2f", it) } ?: Format.DASH, color = RtColors.GForce),
+                    Stat("Elev.", Format.altitude(sample?.altitudeM)),
+                ),
+                style = RtType.metricM,
+            )
+
+            Spacer(Modifier.height(20.dp))
+            SegmentedTabs(chart, onSelect = { haptics.tick(); vm.selectChart(it) })
+            Spacer(Modifier.height(16.dp))
+
+            if (data == null) {
+                Shimmer(Modifier.fillMaxWidth().height(110.dp))
             } else if (samples.size < 2) {
                 Text("Not enough telemetry was recorded for charts.", style = RtType.caption, color = RtColors.TextSecondary)
             } else {
-                ScrubReadout(ride, scrubSample, onClear = vm::clearScrub)
-                Spacer(Modifier.height(RtDimens.cardSpacing))
-                RtCard {
-                    ChartBlock("Speed", Format.speedWithUnit(scrubSample?.speedMps), data.speed, RtColors.Primary, scrub, vm::scrubTo)
-                    ChartDivider()
-                    LineChart(
-                        "Lean angle", Format.lean(scrubSample?.leanDeg), data.lean, RtColors.Right, scrub, vm::scrubTo,
-                        negativeColor = RtColors.Left,
-                        unavailableText = "Lean was unavailable for this ride (phone mount not calibrated or no gyroscope).",
-                    )
-                    ChartDivider()
-                    ChartBlock("G-force", Format.g(scrubSample?.combinedG), data.gForce, RtColors.GForce, scrub, vm::scrubTo)
-                    ChartDivider()
-                    ChartBlock("Elevation", Format.altitude(scrubSample?.altitudeM), data.elevation, RtColors.Left, scrub, vm::scrubTo)
+                val (series, color, negative) = when (chart) {
+                    ChartKind.SPEED -> Triple(data.speed, RtColors.Primary, null)
+                    ChartKind.LEAN -> Triple(data.lean, RtColors.Right, RtColors.Left)
+                    ChartKind.G -> Triple(data.gForce, RtColors.GForce, null)
+                    ChartKind.ELEVATION -> Triple(data.elevation, RtColors.Left, null)
                 }
-                Spacer(Modifier.height(RtDimens.xs))
-                Text("Tap or drag a chart to scrub through the ride.", style = RtType.caption, color = RtColors.TextTertiary)
+                LineChart(
+                    title = chart.label, readout = "", series = series, color = color,
+                    scrubFraction = scrub, onScrub = vm::scrubTo, negativeColor = negative,
+                    unavailableText = if (chart == ChartKind.LEAN) "Lean wasn't recorded for this ride (mount not calibrated or no gyroscope)." else "Not recorded for this ride.",
+                    showHeader = false, height = 110.dp,
+                )
+                Spacer(Modifier.height(12.dp))
+                Slider(
+                    value = scrub ?: 0f,
+                    onValueChange = vm::scrubTo,
+                    colors = SliderDefaults.colors(thumbColor = RtColors.TextPrimary, activeTrackColor = RtColors.Primary, inactiveTrackColor = RtColors.Outline),
+                    modifier = Modifier.semantics { contentDescription = "Ride timeline" },
+                )
+                Row(Modifier.fillMaxWidth()) {
+                    Text(Format.timeOfDay(samples.first().timeMillis), style = RtType.caption, color = RtColors.TextSecondary, modifier = Modifier.weight(1f))
+                    Text(Format.timeOfDay(samples.last().timeMillis), style = RtType.caption, color = RtColors.TextSecondary)
+                }
             }
+
+            Spacer(Modifier.height(20.dp))
+            SecondaryButton("Play ride", onReplay, icon = Icons.Rounded.PlayArrow, enabled = (data?.route?.size ?: 0) >= 2)
 
             RideDynamics(ride)
             Maneuvers(ride)
+            TimeBreakdown(ride)
 
             val events = data?.track?.events.orEmpty().filter { showTurns || !it.type.isTurn }
             SectionHeader("Events") {
@@ -158,30 +209,30 @@ fun RideDetailScreen(rideId: String, onBack: () -> Unit, onReplay: () -> Unit) {
                     }
                 }
             }
-            RtCard(contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp, horizontal = 20.dp)) {
-                if (events.isEmpty()) {
-                    Text("No events recorded.", style = RtType.body, color = RtColors.TextSecondary, modifier = Modifier.padding(vertical = 12.dp))
-                }
-                events.forEachIndexed { i, e ->
-                    val p = e.presentation()
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable { vm.scrubToTime(e.timeMillis) }
-                            .padding(vertical = 12.dp)
-                            .semantics(mergeDescendants = true) {},
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(p.icon, contentDescription = null, tint = p.color, modifier = Modifier.size(22.dp))
-                        Spacer(Modifier.width(RtDimens.sm))
-                        Column(Modifier.weight(1f)) {
-                            Text(p.title, style = RtType.bodyStrong.copy(fontSize = RtType.body.fontSize), color = RtColors.TextPrimary)
-                            if (!p.detail.isNullOrBlank()) Text(p.detail, style = RtType.caption, color = RtColors.TextSecondary)
-                        }
-                        Text(Format.timeOfDay(e.timeMillis), style = RtType.caption, color = RtColors.TextSecondary)
+            if (events.isEmpty()) {
+                Text("No events recorded.", style = RtType.body, color = RtColors.TextSecondary, modifier = Modifier.padding(vertical = 12.dp))
+            }
+            events.forEachIndexed { i, e ->
+                val p = e.presentation()
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable(role = Role.Button) { vm.scrubToTime(e.timeMillis) }
+                        .padding(vertical = 12.dp)
+                        .semantics(mergeDescendants = true) {},
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(36.dp).background(RtColors.Surface, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+                        Icon(p.icon, contentDescription = null, tint = p.color, modifier = Modifier.size(20.dp))
                     }
-                    if (i < events.lastIndex) HorizontalDivider(color = RtColors.Outline.copy(alpha = 0.5f))
+                    Spacer(Modifier.width(RtDimens.sm))
+                    Column(Modifier.weight(1f)) {
+                        Text(p.title, style = RtType.bodyStrong, color = RtColors.TextPrimary)
+                        if (!p.detail.isNullOrBlank()) Text(p.detail, style = RtType.caption, color = RtColors.TextSecondary)
+                    }
+                    Text(Format.timeOfDay(e.timeMillis), style = RtType.caption, color = RtColors.TextSecondary)
                 }
+                if (i < events.lastIndex) HairlineDivider()
             }
             Spacer(Modifier.height(RtDimens.lg))
         }
@@ -214,58 +265,30 @@ fun RideDetailScreen(rideId: String, onBack: () -> Unit, onReplay: () -> Unit) {
     }
 }
 
+/** Pill segmented control; the selected segment is an inverse (white) pill. */
 @Composable
-private fun SummaryGrid(ride: Ride) {
-    TwoColumn(
-        left = { StatTile("Distance", Format.distanceValue(ride.stats.distanceM), it, unit = "km") },
-        right = { StatTile("Duration", Format.duration(ride.durationMillis), it) },
-    )
-    Spacer(Modifier.height(RtDimens.cardSpacing))
-    TwoColumn(
-        left = { StatTile("Moving time", Format.duration(ride.stats.movingMillis), it) },
-        right = { StatTile("Stopped time", Format.duration(ride.stats.stoppedMillis), it) },
-    )
-    Spacer(Modifier.height(RtDimens.cardSpacing))
-    TwoColumn(
-        left = { StatTile("Avg speed", Format.speedKmh(ride.stats.avgSpeedMps), it, unit = "km/h") },
-        right = { StatTile("Max speed", Format.speedKmh(ride.stats.maxSpeedMps), it, unit = "km/h") },
-    )
-}
-
-@Composable
-private fun ScrubReadout(ride: Ride, sample: TelemetrySample?, onClear: () -> Unit) {
-    RtCard(color = RtColors.SurfaceRaised) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Label(
-                if (sample == null) "Timeline" else "At ${Format.clock(sample.timeMillis - ride.startTimeMillis)} · ${Format.timeOfDay(sample.timeMillis)}",
-                Modifier.weight(1f),
+private fun SegmentedTabs(selected: ChartKind, onSelect: (ChartKind) -> Unit) {
+    Row(
+        Modifier
+            .background(RtColors.Surface, RoundedCornerShape(50))
+            .border(1.dp, RtColors.Hairline, RoundedCornerShape(50))
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        ChartKind.entries.forEach { kind ->
+            val isSel = kind == selected
+            val bg by animateColorAsState(if (isSel) RtColors.Inverse else RtColors.Surface, label = "tabBg")
+            val fg by animateColorAsState(if (isSel) RtColors.OnInverse else RtColors.TextSecondary, label = "tabFg")
+            Text(
+                kind.label,
+                style = RtType.bodyStrong.copy(fontSize = RtType.body.fontSize),
+                color = fg,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(bg)
+                    .selectable(selected = isSel, role = Role.Tab, onClick = { onSelect(kind) })
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
             )
-            if (sample != null) {
-                Text("Clear", style = RtType.caption, color = RtColors.Primary, modifier = Modifier.clickable(onClick = onClear).padding(4.dp))
-            }
-        }
-        Spacer(Modifier.height(RtDimens.sm))
-        if (sample == null) {
-            Text("Scrub a chart to replay the ride moment by moment.", style = RtType.body, color = RtColors.TextSecondary)
-        } else {
-            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                StatBlock("Speed", Format.speedKmh(sample.speedMps), unit = "km/h", style = RtType.metricS)
-                StatBlock("Lean", Format.lean(sample.leanDeg), style = RtType.metricS, color = leanColor(sample.leanDeg))
-                StatBlock("G", Format.g(sample.combinedG), style = RtType.metricS, color = RtColors.GForce)
-                StatBlock("Elev.", Format.altitude(sample.altitudeM), style = RtType.metricS)
-            }
         }
     }
-}
-
-@Composable
-private fun ChartBlock(title: String, readout: String, series: ChartSeries, color: androidx.compose.ui.graphics.Color, scrub: Float?, onScrub: (Float) -> Unit) {
-    LineChart(title, readout, series, color, scrub, onScrub)
-}
-
-@Composable
-private fun ChartDivider() {
-    Spacer(Modifier.height(RtDimens.md))
-    HorizontalDivider(color = RtColors.Outline.copy(alpha = 0.5f))
-    Spacer(Modifier.height(RtDimens.md))
 }

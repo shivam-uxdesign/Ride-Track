@@ -5,6 +5,13 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -144,7 +151,10 @@ fun RideTrackNavHost() {
                 }
                 composable(
                     Routes.LIVE,
-                    enterTransition = { fadeIn(tween(350)) },
+                    // The start button "opens up" into the live screen.
+                    enterTransition = {
+                        fadeIn(tween(300)) + scaleIn(spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow), initialScale = 0.92f)
+                    },
                     exitTransition = { ExitTransition.None },
                 ) {
                     LiveRideScreen(
@@ -206,21 +216,25 @@ private fun NavHostController.switchTab(route: String) {
 
 @Composable
 private fun BottomBar(nav: NavHostController, current: String?) {
-    NavigationBar(containerColor = RtColors.Background, tonalElevation = androidx.compose.ui.unit.Dp(0f)) {
-        tabs.forEach { tab ->
-            NavigationBarItem(
-                selected = current == tab.route,
-                onClick = { nav.switchTab(tab.route) },
-                icon = { Icon(tab.icon, contentDescription = null) },
-                label = { Text(tab.label.uppercase(), style = RtType.label) },
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = RtColors.Primary,
-                    selectedTextColor = RtColors.Primary,
-                    indicatorColor = RtColors.Surface,
-                    unselectedIconColor = RtColors.TextSecondary,
-                    unselectedTextColor = RtColors.TextSecondary,
-                ),
-            )
+    Column {
+        HorizontalDivider(thickness = 1.dp, color = RtColors.Hairline)
+        NavigationBar(containerColor = RtColors.Background, tonalElevation = 0.dp) {
+            tabs.forEach { tab ->
+                val selected = current == tab.route
+                NavigationBarItem(
+                    selected = selected,
+                    onClick = { nav.switchTab(tab.route) },
+                    icon = { Icon(tab.icon, contentDescription = null) },
+                    label = { Text(tab.label, style = RtType.caption.copy(fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal)) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = RtColors.Primary,
+                        selectedTextColor = RtColors.TextPrimary,
+                        indicatorColor = RtColors.Primary.copy(alpha = 0.16f),
+                        unselectedIconColor = RtColors.TextSecondary,
+                        unselectedTextColor = RtColors.TextSecondary,
+                    ),
+                )
+            }
         }
     }
 }

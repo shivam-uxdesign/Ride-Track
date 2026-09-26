@@ -75,22 +75,26 @@ fun LineChart(
     modifier: Modifier = Modifier,
     negativeColor: Color? = null,
     unavailableText: String = "Unavailable for this ride",
+    showHeader: Boolean = true,
+    height: androidx.compose.ui.unit.Dp = 96.dp,
 ) {
     Column(modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Label(title, Modifier.weight(1f))
-            Text(readout, style = RtType.metricS, color = RtColors.TextPrimary)
+        if (showHeader) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Label(title, Modifier.weight(1f))
+                Text(readout, style = RtType.metricS, color = RtColors.TextPrimary)
+            }
+            Spacer(Modifier.height(RtDimens.xs))
         }
-        Spacer(Modifier.height(RtDimens.xs))
         if (!series.hasData) {
-            Text(unavailableText, style = RtType.caption, color = RtColors.TextTertiary, modifier = Modifier.height(96.dp))
+            Text(unavailableText, style = RtType.caption, color = RtColors.TextSecondary, modifier = Modifier.height(height))
             return@Column
         }
         val path = remember(series) { Path() }
         Canvas(
             Modifier
                 .fillMaxWidth()
-                .height(96.dp)
+                .height(height)
                 .semantics { contentDescription = "$title chart. Drag to scrub the ride timeline." }
                 .pointerInput(Unit) {
                     detectTapGestures { onScrub((it.x / size.width).coerceIn(0f, 1f)) }

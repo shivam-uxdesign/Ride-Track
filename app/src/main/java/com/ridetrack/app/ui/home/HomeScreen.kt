@@ -1,6 +1,11 @@
 package com.ridetrack.app.ui.home
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,18 +13,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AccountCircle
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Route
 import androidx.compose.material.icons.outlined.TwoWheeler
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -29,29 +36,38 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ridetrack.app.ui.appViewModel
-import com.ridetrack.app.ui.common.RideRow
 import com.ridetrack.app.ui.components.Chip
 import com.ridetrack.app.ui.components.DemoBadge
 import com.ridetrack.app.ui.components.EmptyState
+import com.ridetrack.app.ui.components.GeoPoint
 import com.ridetrack.app.ui.components.Label
 import com.ridetrack.app.ui.components.PrimaryButton
-import com.ridetrack.app.ui.components.RtCard
+import com.ridetrack.app.ui.components.RouteThumbnail
 import com.ridetrack.app.ui.components.SecondaryButton
-import com.ridetrack.app.ui.components.SectionHeader
-import com.ridetrack.app.ui.components.StatTile
+import com.ridetrack.app.ui.components.Stat
+import com.ridetrack.app.ui.components.StatRow
 import com.ridetrack.app.ui.components.StatusIndicator
 import com.ridetrack.app.ui.components.StatusLevel
-import com.ridetrack.app.ui.components.TwoColumn
+import com.ridetrack.app.ui.components.breathingGlow
+import com.ridetrack.app.ui.components.riseIn
 import com.ridetrack.app.ui.format.Format
 import com.ridetrack.app.ui.theme.RtColors
 import com.ridetrack.app.ui.theme.RtDimens
 import com.ridetrack.app.ui.theme.RtType
+import com.ridetrack.app.ui.theme.pressScale
+import com.ridetrack.telemetry.model.DataSourceKind
 import com.ridetrack.telemetry.model.Ride
+import java.time.LocalTime
 
 @Composable
 fun HomeScreen(
@@ -73,62 +89,49 @@ fun HomeScreen(
             .fillMaxSize()
             .statusBarsPadding()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = RtDimens.screenPadding),
+            .padding(horizontal = RtDimens.screenPaddingWide),
     ) {
-        // Header
-        Row(Modifier.fillMaxWidth().padding(top = RtDimens.xs), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("RIDE TRACK", style = RtType.label.copy(letterSpacing = RtType.label.letterSpacing * 2), color = RtColors.Primary)
-                Text(
-                    s.bike?.displayName ?: "No bike yet",
-                    style = RtType.caption,
-                    color = RtColors.TextSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            if (s.demoMode) DemoBadge(Modifier.padding(end = RtDimens.xs))
-            IconButton(onClick = onOpenProfile) {
-                Icon(Icons.Outlined.AccountCircle, contentDescription = "Profile and settings", tint = RtColors.TextSecondary)
-            }
-        }
-        Spacer(Modifier.height(RtDimens.md))
+        Header(s, onOpenProfile, onOpenBikes)
+        Spacer(Modifier.height(28.dp))
 
         s.unfinished?.let { ride ->
             UnfinishedRideCard(ride, onSave = { vm.saveUnfinished(ride) }, onDiscard = { confirmDiscard = ride })
-            Spacer(Modifier.height(RtDimens.cardSpacing))
+            Spacer(Modifier.height(RtDimens.md))
         }
 
-        ReadyCard(s, onStartRide, onReturnToRide, onAddBike, onOpenBikes)
+        ReadyCard(s, onStartRide, onReturnToRide, onAddBike, Modifier.riseIn(0))
 
         if (!s.loading) {
-            if (s.totals != null) {
-                val t = s.totals!!
-                SectionHeader("Your riding")
-                TwoColumn(
-                    left = { StatTile("Total distance", Format.distanceValue(t.distanceM), it, unit = "km") },
-                    right = { StatTile("Total rides", t.rideCount.toString(), it) },
-                )
-                Spacer(Modifier.height(RtDimens.cardSpacing))
-                TwoColumn(
-                    left = { StatTile("Riding time", Format.duration(t.movingMillis), it) },
-                    right = { StatTile("Longest ride", t.longestRideM?.let(Format::distanceValue) ?: Format.DASH, it, unit = "km") },
+            val t = s.totals
+            if (t != null) {
+                Spacer(Modifier.height(32.dp))
+                Label("This month", Modifier.riseIn(1))
+                Spacer(Modifier.height(14.dp))
+                StatRow(
+                    listOf(
+                        Stat("Distance", Format.distanceValue(t.distanceThisMonthM), "km"),
+                        Stat("Rides", t.ridesThisMonth.toString()),
+                        Stat("Moving", Format.duration(t.movingThisMonthMillis)),
+                    ),
+                    modifier = Modifier.riseIn(1),
+                    style = RtType.metricL,
                 )
             }
             if (s.recent.isNotEmpty()) {
-                SectionHeader("Recent rides") {
-                    TextButton(onClick = onSeeAllRides) { Text("See all", style = RtType.caption, color = RtColors.Primary) }
+                Spacer(Modifier.height(32.dp))
+                Row(Modifier.riseIn(2), verticalAlignment = Alignment.CenterVertically) {
+                    Label("Recent", Modifier.weight(1f))
+                    TextButton(onClick = onSeeAllRides) { Text("See all", style = RtType.body, color = RtColors.Primary) }
                 }
                 s.recent.forEach { ride ->
-                    RideRow(ride, bikeName = null, onClick = { onOpenRide(ride.id) }, compact = true)
-                    Spacer(Modifier.height(RtDimens.cardSpacing))
+                    RecentRideRow(ride, s.thumbnails[ride.id], onClick = { onOpenRide(ride.id) }, modifier = Modifier.riseIn(2))
                 }
             } else if (s.hasBikes && s.totals == null) {
-                Spacer(Modifier.height(RtDimens.lg))
                 EmptyState(
                     title = "No rides yet",
                     message = "Start your first ride to begin building your riding history.",
                     icon = Icons.Outlined.Route,
+                    modifier = Modifier.padding(top = RtDimens.lg),
                 )
             }
         }
@@ -149,90 +152,173 @@ fun HomeScreen(
     }
 }
 
-@Composable
-private fun ReadyCard(
-    s: HomeUiState,
-    onStartRide: () -> Unit,
-    onReturnToRide: () -> Unit,
-    onAddBike: () -> Unit,
-    onOpenBikes: () -> Unit,
-) {
-    RtCard {
-        if (s.rideState.isActive) {
-            Chip("Ride in progress", RtColors.Ok)
-            Spacer(Modifier.height(RtDimens.md))
-            Text(s.bike?.displayName ?: "", style = RtType.headline, color = RtColors.TextPrimary)
-            Spacer(Modifier.height(RtDimens.lg))
-            PrimaryButton("Return to ride", onReturnToRide, large = true)
-            return@RtCard
-        }
-        if (!s.loading && !s.hasBikes) {
-            Label("Your bike")
-            Spacer(Modifier.height(RtDimens.xs))
-            Text("Add your motorcycle", style = RtType.headline, color = RtColors.TextPrimary)
-            Spacer(Modifier.height(RtDimens.xs))
-            Text(
-                "Every ride is saved against a bike. Add yours to start recording.",
-                style = RtType.body,
-                color = RtColors.TextSecondary,
-            )
-            Spacer(Modifier.height(RtDimens.lg))
-            PrimaryButton("Add bike", onAddBike, large = true, icon = Icons.Outlined.TwoWheeler)
-            return@RtCard
-        }
+private fun greeting(): String = when (LocalTime.now().hour) {
+    in 5..11 -> "Good morning"
+    in 12..16 -> "Good afternoon"
+    in 17..21 -> "Good evening"
+    else -> "Good night"
+}
 
-        Label("Your bike")
-        Spacer(Modifier.height(RtDimens.xxs))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                s.bike?.displayName ?: " ",
-                style = RtType.title,
-                color = RtColors.TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(onClick = onOpenBikes) { Text("Change", style = RtType.caption, color = RtColors.Primary) }
-        }
-        Spacer(Modifier.height(RtDimens.xl))
-        Text("READY TO RIDE", style = RtType.label, color = RtColors.Primary)
-        Spacer(Modifier.height(RtDimens.sm))
-        PrimaryButton("Start ride", onStartRide, large = true, icon = Icons.Rounded.PlayArrow, haptic = true, enabled = s.bike != null)
-        Spacer(Modifier.height(RtDimens.md))
-        Row(horizontalArrangement = Arrangement.spacedBy(RtDimens.md)) {
-            if (s.demoMode) {
-                StatusIndicator("GPS", "Simulated", StatusLevel.WARNING)
-            } else {
-                val (text, level) = when (s.gps) {
-                    GpsReadiness.READY -> "Ready" to StatusLevel.OK
-                    GpsReadiness.PERMISSION_NEEDED -> "Permission needed" to StatusLevel.WARNING
-                    GpsReadiness.DISABLED -> "Off" to StatusLevel.ERROR
-                    GpsReadiness.NO_HARDWARE -> "Unavailable" to StatusLevel.ERROR
-                }
-                StatusIndicator("GPS", text, level)
+@Composable
+private fun Header(s: HomeUiState, onOpenProfile: () -> Unit, onOpenBikes: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(top = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(
+            Modifier
+                .weight(1f)
+                .clickable(onClick = onOpenBikes, role = Role.Button),
+        ) {
+            Text(greeting(), style = RtType.title.copy(fontSize = RtType.headline.fontSize * 1.18f), color = RtColors.TextPrimary)
+            val bike = s.bike
+            val sub = when {
+                bike == null -> "No bike yet"
+                s.demoMode -> "${bike.displayName} · demo mode"
+                bike.calibration != null -> "${bike.displayName} · mount calibrated"
+                else -> "${bike.displayName} · mount not calibrated"
             }
-            val (motionText, motionLevel) = when {
-                s.demoMode -> "Simulated" to StatusLevel.WARNING
-                s.sensors.canEstimateLean -> "Ready" to StatusLevel.OK
-                s.sensors.accelerometer -> "No gyroscope" to StatusLevel.WARNING
-                else -> "Unavailable" to StatusLevel.ERROR
-            }
-            StatusIndicator("Motion", motionText, motionLevel)
+            Text(sub, style = RtType.body, color = RtColors.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
         }
-        if (!s.demoMode && s.bike != null && s.bike.calibration == null) {
-            Spacer(Modifier.height(RtDimens.sm))
-            Text(
-                "Phone mount not calibrated — lean angle will be unavailable until you calibrate.",
-                style = RtType.caption,
-                color = RtColors.Warning,
-            )
+        if (s.demoMode) DemoBadge(Modifier.padding(end = RtDimens.xs))
+        val interaction = remember { MutableInteractionSource() }
+        Box(
+            Modifier
+                .size(44.dp)
+                .pressScale(interaction)
+                .clip(CircleShape)
+                .background(RtColors.Surface)
+                .border(1.dp, RtColors.Hairline, CircleShape)
+                .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onOpenProfile)
+                .semantics { contentDescription = "Profile and settings" },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Outlined.Person, contentDescription = null, tint = RtColors.TextSecondary, modifier = Modifier.size(20.dp))
         }
     }
 }
 
 @Composable
+private fun ReadyCard(s: HomeUiState, onStartRide: () -> Unit, onReturnToRide: () -> Unit, onAddBike: () -> Unit, modifier: Modifier) {
+    val shape = RoundedCornerShape(RtDimens.heroRadius)
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(RtColors.Surface)
+            .border(1.dp, RtColors.Hairline, shape)
+            .padding(22.dp),
+        verticalArrangement = Arrangement.spacedBy(22.dp),
+    ) {
+        when {
+            s.rideState.isActive -> {
+                Chip("Ride in progress", RtColors.Ok)
+                Text("Recording", style = RtType.hero, color = RtColors.TextPrimary)
+                PrimaryButton("Return to ride", onReturnToRide, large = true)
+            }
+            !s.loading && !s.hasBikes -> {
+                Column {
+                    Text("Add your motorcycle", style = RtType.hero, color = RtColors.TextPrimary)
+                    Text(
+                        "Every ride is saved against a bike. Add yours to start recording.",
+                        style = RtType.body,
+                        color = RtColors.TextSecondary,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+                PrimaryButton("Add bike", onAddBike, large = true, icon = Icons.Outlined.TwoWheeler)
+            }
+            else -> {
+                Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                    if (s.demoMode) {
+                        StatusIndicator("GPS", "simulated", StatusLevel.WARNING)
+                    } else {
+                        val (text, level) = when (s.gps) {
+                            GpsReadiness.READY -> "ready" to StatusLevel.OK
+                            GpsReadiness.PERMISSION_NEEDED -> "needs permission" to StatusLevel.WARNING
+                            GpsReadiness.DISABLED -> "off" to StatusLevel.ERROR
+                            GpsReadiness.NO_HARDWARE -> "unavailable" to StatusLevel.ERROR
+                        }
+                        StatusIndicator("GPS", text, level)
+                    }
+                    val (motion, motionLevel) = when {
+                        s.demoMode -> "simulated" to StatusLevel.WARNING
+                        s.sensors.canEstimateLean -> "ready" to StatusLevel.OK
+                        s.sensors.accelerometer -> "no gyroscope" to StatusLevel.WARNING
+                        else -> "unavailable" to StatusLevel.ERROR
+                    }
+                    StatusIndicator("Sensors", motion, motionLevel)
+                }
+                Column {
+                    Text("Ready to ride", style = RtType.hero, color = RtColors.TextPrimary)
+                    Text(
+                        if (!s.demoMode && s.bike?.calibration == null) "Calibrate the phone mount in Bike to see lean angle."
+                        else "GPS and sensors are checked again when you start.",
+                        style = RtType.body,
+                        color = RtColors.TextSecondary,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+                PrimaryButton(
+                    "Start ride", onStartRide,
+                    modifier = Modifier.breathingGlow(RtColors.Primary, enabled = s.bike != null),
+                    large = true, icon = Icons.Rounded.PlayArrow, haptic = true, enabled = s.bike != null,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentRideRow(ride: Ride, route: List<GeoPoint>?, onClick: () -> Unit, modifier: Modifier) {
+    val interaction = remember { MutableInteractionSource() }
+    Row(
+        modifier
+            .fillMaxWidth()
+            .pressScale(interaction)
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(52.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(RtColors.Surface),
+            contentAlignment = Alignment.Center,
+        ) {
+            RouteThumbnail(route.orEmpty(), Modifier.size(40.dp))
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(ride.name, style = RtType.bodyStrong, color = RtColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                if (ride.source == DataSourceKind.DEMO) {
+                    Spacer(Modifier.width(6.dp))
+                    Text("DEMO", style = RtType.label, color = RtColors.Warning)
+                }
+            }
+            Text(
+                "${Format.rideDate(ride.startTimeMillis).substringBefore(" ·")} · ${Format.duration(ride.durationMillis)}",
+                style = RtType.caption,
+                color = RtColors.TextSecondary,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        Text(Format.distanceValue(ride.stats.distanceM), style = RtType.metricS, color = RtColors.TextPrimary)
+        Text(" km", style = RtType.caption, color = RtColors.TextSecondary)
+    }
+}
+
+@Composable
 private fun UnfinishedRideCard(ride: Ride, onSave: () -> Unit, onDiscard: () -> Unit) {
-    RtCard(color = RtColors.SurfaceRaised) {
+    val shape = RoundedCornerShape(RtDimens.cardRadius)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(RtColors.SurfaceRaised)
+            .border(1.dp, RtColors.Warning.copy(alpha = 0.3f), shape)
+            .padding(20.dp),
+    ) {
         Chip("Unfinished ride", RtColors.Warning)
         Spacer(Modifier.height(RtDimens.sm))
         Text(

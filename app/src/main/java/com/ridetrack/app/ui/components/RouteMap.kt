@@ -1,6 +1,9 @@
 package com.ridetrack.app.ui.components
 
 import android.os.Bundle
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -37,7 +40,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.ridetrack.app.ui.theme.RtColors
 import com.ridetrack.app.ui.theme.RtDimens
+import com.ridetrack.app.ui.theme.RtMotion
 import com.ridetrack.app.ui.theme.RtType
+import com.ridetrack.app.ui.theme.rememberReduceMotion
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
@@ -59,6 +64,7 @@ data class GeoPoint(val latitude: Double, val longitude: Double)
 private const val ROUTE_SOURCE = "route-source"
 private const val ENDS_SOURCE = "ends-source"
 private const val MARKER_SOURCE = "marker-source"
+private const val PROGRESS_SOURCE = "progress-source"
 
 /**
  * Fallback dark raster basemap (OpenStreetMap data, CARTO tiles) used when no MapTiler key
@@ -81,7 +87,7 @@ private val DARK_STYLE = """
     }
   },
   "layers": [
-    { "id": "background", "type": "background", "paint": { "background-color": "#0B0B0D" } },
+    { "id": "background", "type": "background", "paint": { "background-color": "#0A0A0B" } },
     { "id": "basemap", "type": "raster", "source": "basemap" }
   ]
 }
@@ -103,6 +109,10 @@ fun RouteMap(
     marker: GeoPoint? = null,
     interactive: Boolean = false,
     followMarker: Boolean = false,
+    /** Number of route points already travelled (scrub/replay); the rest is dimmed. */
+    progress: Int? = null,
+    /** Draw the route progressively once when it first appears (ride summary). */
+    animateDraw: Boolean = false,
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -154,6 +164,34 @@ fun RouteMap(
             addRouteLayers(s)
             style = s
         }
+    }
+
+    val reduceMotion = rememberReduceMotion()
+    val drawAnim = remember(route) { Animatable(if (animateDraw && !reduceMotion) 0f else 1f) }
+    LaunchedEffect(style, route) {
+        if (style != null && animateDraw && !reduceMotion && drawAnim.value < 1f) {
+            kotlinx.coroutines.delay(300)
+            drawAnim.animateTo(1f, tween(RtMotion.ROUTE_DRAW, easing = FastOutSlowInEasing))
+        }
+    }
+    val drawnCount = if (drawAnim.value < 1f) (route.size * drawAnim.value).toInt().coerceAtLeast(1) else null
+    val effectiveProgress = drawnCount ?: progress
+
+    LaunchedEffect(style, route, effectiveProgress) {
+        val s = style ?: return@LaunchedEffect
+        val done = effectiveProgress?.coerceIn(0, route.size)
+        val pts = route.take(done ?: 0).map { Point.fromLngLat(it.longitude, it.latitude) }
+        s.getSourceAs<GeoJsonSource>(PROGRESS_SOURCE)?.setGeoJson(
+            if (pts.size >= 2) FeatureCollection.fromFeature(Feature.fromGeometry(LineString.fromLngLats(pts)))
+            else FeatureCollection.fromFeatures(emptyList()),
+        )
+        // While a progress is shown, the untravelled route is dimmed; while drawing, hidden.
+        val baseColor = if (done == null) hex(RtColors.Primary) else "#2C4F50"
+        s.getLayer("route")?.setProperties(
+            PropertyFactory.lineColor(baseColor),
+            PropertyFactory.lineOpacity(if (drawnCount != null) 0f else 1f),
+        )
+        s.getLayer("route-casing")?.setProperties(PropertyFactory.lineOpacity(if (drawnCount != null) 0f else 0.6f))
     }
 
     LaunchedEffect(style, route) {
@@ -232,6 +270,7 @@ private fun addRouteLayers(s: Style) {
     s.addSource(GeoJsonSource(ROUTE_SOURCE))
     s.addSource(GeoJsonSource(ENDS_SOURCE))
     s.addSource(GeoJsonSource(MARKER_SOURCE))
+    s.addSource(GeoJsonSource(PROGRESS_SOURCE))
     s.addLayer(
         LineLayer("route-casing", ROUTE_SOURCE).withProperties(
             PropertyFactory.lineColor("#000000"),
@@ -245,6 +284,14 @@ private fun addRouteLayers(s: Style) {
         LineLayer("route", ROUTE_SOURCE).withProperties(
             PropertyFactory.lineColor(hex(RtColors.Primary)),
             PropertyFactory.lineWidth(4f),
+            PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+            PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+        ),
+    )
+    s.addLayer(
+        LineLayer("progress", PROGRESS_SOURCE).withProperties(
+            PropertyFactory.lineColor(hex(RtColors.Primary)),
+            PropertyFactory.lineWidth(4.5f),
             PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
             PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
         ),

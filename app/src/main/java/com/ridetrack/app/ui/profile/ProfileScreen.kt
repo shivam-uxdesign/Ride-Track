@@ -132,7 +132,7 @@ fun ProfileScreen(onOpenHudSettings: () -> Unit) {
             Label("Live ride metrics")
             Spacer(Modifier.height(RtDimens.xxs))
             Text(
-                "Choose up to ${LiveMetric.MAX_VISIBLE} extra metrics. Speed, lean, distance and duration are always shown.",
+                "Choose up to ${LiveMetric.MAX_VISIBLE} extra metrics. Speed, lean, distance, average speed and ride time are always shown.",
                 style = RtType.caption,
                 color = RtColors.TextSecondary,
             )

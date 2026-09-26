@@ -18,13 +18,14 @@ enum class LiveMetric(val label: String) {
     BRAKING("Braking"),
     G_FORCE("G-force"),
     MAX_LEAN("Max lean"),
+    MAX_SPEED("Max speed"),
     HEADING("Heading"),
     ALTITUDE("Altitude"),
     ;
 
     companion object {
         const val MAX_VISIBLE = 4
-        val DEFAULT = setOf(ACCELERATION, G_FORCE)
+        val DEFAULT = setOf(G_FORCE, MAX_LEAN)
     }
 }
 
@@ -65,7 +66,7 @@ data class Settings(
     val autoPause: Boolean = true,
     val demoMode: Boolean = false,
     val liveMetrics: Set<LiveMetric> = LiveMetric.DEFAULT,
-    val showGForceIndicator: Boolean = true,
+    val showGForceIndicator: Boolean = false,
     val selectedBikeId: String? = null,
     val hud: HudSettings = HudSettings(),
     val mapStyle: MapStyle = MapStyle.DARK,
@@ -102,7 +103,7 @@ class SettingsRepository(private val context: Context) {
                 ?.mapNotNull { name -> LiveMetric.entries.firstOrNull { it.name == name } }
                 ?.toSet()
                 ?: LiveMetric.DEFAULT,
-            showGForceIndicator = p[Keys.gIndicator] ?: true,
+            showGForceIndicator = p[Keys.gIndicator] ?: false,
             selectedBikeId = p[Keys.selectedBike],
             hud = HudSettings(
                 enabled = p[Keys.hudEnabled] ?: true,
