@@ -25,6 +25,10 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         buildConfigField("String", "MAPTILER_KEY", "\"$mapTilerKey\"")
+        // Optional: `-PabiFilter=arm64-v8a` builds a smaller APK for modern phones only.
+        providers.gradleProperty("abiFilter").orNull?.let { abis ->
+            ndk { abiFilters += abis.split(",").map(String::trim) }
+        }
     }
 
     buildTypes {
