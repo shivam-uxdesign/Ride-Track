@@ -39,6 +39,8 @@ enum class HudSize(val label: String, val scale: Float) { SMALL("Small", 0.85f),
 
 enum class HudTheme(val label: String) { DARK("Dark"), HIGH_CONTRAST("High contrast") }
 
+enum class MapStyle(val label: String) { DARK("Dark"), SATELLITE("Satellite") }
+
 /** Floating pop-up HUD shown over other apps during a ride. */
 data class HudSettings(
     val enabled: Boolean = true,
@@ -66,6 +68,7 @@ data class Settings(
     val showGForceIndicator: Boolean = true,
     val selectedBikeId: String? = null,
     val hud: HudSettings = HudSettings(),
+    val mapStyle: MapStyle = MapStyle.DARK,
 )
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -85,6 +88,7 @@ class SettingsRepository(private val context: Context) {
         val hudX = intPreferencesKey("hud_x")
         val hudY = intPreferencesKey("hud_y")
         val hudPromptDismissed = booleanPreferencesKey("hud_prompt_dismissed")
+        val mapStyle = stringPreferencesKey("map_style")
     }
 
     private inline fun <reified T : Enum<T>> enumOf(name: String?, fallback: T): T =
@@ -110,6 +114,7 @@ class SettingsRepository(private val context: Context) {
                 y = p[Keys.hudY],
                 promptDismissed = p[Keys.hudPromptDismissed] ?: false,
             ),
+            mapStyle = enumOf(p[Keys.mapStyle], MapStyle.DARK),
         )
     }
 
@@ -131,4 +136,5 @@ class SettingsRepository(private val context: Context) {
         it[Keys.hudY] = y
     }
     suspend fun setHudPromptDismissed(dismissed: Boolean) = context.dataStore.edit { it[Keys.hudPromptDismissed] = dismissed }
+    suspend fun setMapStyle(style: MapStyle) = context.dataStore.edit { it[Keys.mapStyle] = style.name }
 }

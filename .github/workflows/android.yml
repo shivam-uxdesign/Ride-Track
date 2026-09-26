@@ -27,6 +27,8 @@ jobs:
         run: ./gradlew :core:telemetry:test --stacktrace
 
       - name: Build, unit test and lint the app
+        env:
+          MAPTILER_KEY: ${{ secrets.MAPTILER_KEY }}
         run: ./gradlew assembleDebug testDebugUnitTest lintDebug --stacktrace
 
       - name: Upload debug APK

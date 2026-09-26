@@ -63,7 +63,15 @@ debug APK as a workflow artifact.
 
 ## Maps
 
-Route maps use MapLibre with dark raster tiles from CARTO (© OpenStreetMap contributors,
-© CARTO). No API key is required. Tiles need a connection; routes are local data and are
-always recorded and drawn offline. For production traffic, use a tile provider/plan that
-permits it.
+Route maps use MapLibre with MapTiler styles — **Dark** (`streets-v2-dark`) and
+**Satellite** (`hybrid`), switchable on any map. Map data © MapTiler © OpenStreetMap
+contributors (shown via the map's ⓘ attribution button).
+
+The MapTiler key is never committed:
+
+- Local builds: add `MAPTILER_KEY=<your key>` to `local.properties`.
+- CI: add a repository secret named `MAPTILER_KEY` (Settings → Secrets and variables → Actions).
+- Restrict the key in MapTiler to the Android package `com.ridetrack.app`.
+
+Without a key the app falls back to a keyless dark basemap (CARTO tiles). Map backgrounds
+need a connection; routes are local data and are always recorded and drawn offline.

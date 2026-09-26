@@ -25,8 +25,12 @@ if [ ! -d "$SDK/platforms/android-35" ] || [ ! -d "$SDK/build-tools/35.0.0" ]; t
   "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" "${PACKAGES[@]}" >/dev/null
 fi
 
-# local.properties is gitignored; point Gradle at the SDK.
-echo "sdk.dir=$SDK" > "$PROJECT/local.properties"
+# local.properties is gitignored; point Gradle at the SDK, keeping other entries (e.g. API keys).
+props="$PROJECT/local.properties"
+touch "$props"
+grep -v '^sdk\.dir=' "$props" > "$props.tmp" || true
+{ echo "sdk.dir=$SDK"; cat "$props.tmp"; } > "$props"
+rm -f "$props.tmp"
 
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
   echo "export ANDROID_HOME=$SDK" >> "$CLAUDE_ENV_FILE"

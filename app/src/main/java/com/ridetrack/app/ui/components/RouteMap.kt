@@ -3,6 +3,16 @@ package com.ridetrack.app.ui.components
 import android.os.Bundle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.semantics.Role
+import com.ridetrack.app.BuildConfig
+import com.ridetrack.app.data.MapStyle
+import com.ridetrack.app.ui.appContainer
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,8 +61,8 @@ private const val ENDS_SOURCE = "ends-source"
 private const val MARKER_SOURCE = "marker-source"
 
 /**
- * Dark raster basemap (OpenStreetMap data, CARTO tiles). Tiles need a connection; the
- * route itself is local data and always draws, even offline.
+ * Fallback dark raster basemap (OpenStreetMap data, CARTO tiles) used when no MapTiler key
+ * is configured. Tiles need a connection; the route is local data and always draws.
  */
 private val DARK_STYLE = """
 {
@@ -119,9 +129,12 @@ fun RouteMap(
         }
     }
 
+    val container = appContainer()
+    val mapStyle by remember { container.settings.settings.map { it.mapStyle } }.collectAsState(initial = MapStyle.DARK)
+    val scope = rememberCoroutineScope()
+
     LaunchedEffect(mapView) {
         mapView.getMapAsync { m ->
-            map = m
             m.uiSettings.apply {
                 isCompassEnabled = false
                 isRotateGesturesEnabled = false
@@ -130,45 +143,16 @@ fun RouteMap(
                 isAttributionEnabled = true
                 setAllGesturesEnabled(interactive)
             }
-            m.setStyle(Style.Builder().fromJson(DARK_STYLE)) { s ->
-                s.addSource(GeoJsonSource(ROUTE_SOURCE))
-                s.addSource(GeoJsonSource(ENDS_SOURCE))
-                s.addSource(GeoJsonSource(MARKER_SOURCE))
-                s.addLayer(
-                    LineLayer("route-casing", ROUTE_SOURCE).withProperties(
-                        PropertyFactory.lineColor("#000000"),
-                        PropertyFactory.lineWidth(7f),
-                        PropertyFactory.lineOpacity(0.6f),
-                        PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
-                        PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
-                    ),
-                )
-                s.addLayer(
-                    LineLayer("route", ROUTE_SOURCE).withProperties(
-                        PropertyFactory.lineColor(hex(RtColors.Primary)),
-                        PropertyFactory.lineWidth(4f),
-                        PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
-                        PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
-                    ),
-                )
-                s.addLayer(
-                    CircleLayer("ends", ENDS_SOURCE).withProperties(
-                        PropertyFactory.circleRadius(5f),
-                        PropertyFactory.circleColor(hex(RtColors.TextPrimary)),
-                        PropertyFactory.circleStrokeColor("#000000"),
-                        PropertyFactory.circleStrokeWidth(2f),
-                    ),
-                )
-                s.addLayer(
-                    CircleLayer("marker", MARKER_SOURCE).withProperties(
-                        PropertyFactory.circleRadius(8f),
-                        PropertyFactory.circleColor(hex(RtColors.GForce)),
-                        PropertyFactory.circleStrokeColor("#000000"),
-                        PropertyFactory.circleStrokeWidth(3f),
-                    ),
-                )
-                style = s
-            }
+            map = m
+        }
+    }
+
+    LaunchedEffect(map, mapStyle) {
+        val m = map ?: return@LaunchedEffect
+        style = null
+        m.setStyle(styleBuilder(mapStyle)) { s ->
+            addRouteLayers(s)
+            style = s
         }
     }
 
@@ -205,6 +189,15 @@ fun RouteMap(
             .semantics { contentDescription = "Route map" },
     ) {
         AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
+        if (MapTiler.available) {
+            MapStyleToggle(
+                selected = mapStyle,
+                onSelect = { st -> scope.launch { container.settings.setMapStyle(st) } },
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(10.dp),
+            )
+        }
         if (route.size < 2) {
             Text(
                 "No GPS route recorded",
@@ -214,6 +207,83 @@ fun RouteMap(
                     .align(Alignment.Center)
                     .background(RtColors.Background.copy(alpha = 0.7f), RoundedCornerShape(50))
                     .padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+        }
+    }
+}
+
+private object MapTiler {
+    val available: Boolean get() = BuildConfig.MAPTILER_KEY.isNotBlank()
+
+    fun styleUrl(style: MapStyle): String {
+        val id = when (style) {
+            MapStyle.DARK -> "streets-v2-dark"
+            MapStyle.SATELLITE -> "hybrid"
+        }
+        return "https://api.maptiler.com/maps/$id/style.json?key=${BuildConfig.MAPTILER_KEY}"
+    }
+}
+
+/** MapTiler vector/satellite styles when a key is configured; otherwise a keyless dark basemap. */
+private fun styleBuilder(style: MapStyle): Style.Builder =
+    if (MapTiler.available) Style.Builder().fromUri(MapTiler.styleUrl(style)) else Style.Builder().fromJson(DARK_STYLE)
+
+private fun addRouteLayers(s: Style) {
+    s.addSource(GeoJsonSource(ROUTE_SOURCE))
+    s.addSource(GeoJsonSource(ENDS_SOURCE))
+    s.addSource(GeoJsonSource(MARKER_SOURCE))
+    s.addLayer(
+        LineLayer("route-casing", ROUTE_SOURCE).withProperties(
+            PropertyFactory.lineColor("#000000"),
+            PropertyFactory.lineWidth(7f),
+            PropertyFactory.lineOpacity(0.6f),
+            PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+            PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+        ),
+    )
+    s.addLayer(
+        LineLayer("route", ROUTE_SOURCE).withProperties(
+            PropertyFactory.lineColor(hex(RtColors.Primary)),
+            PropertyFactory.lineWidth(4f),
+            PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+            PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+        ),
+    )
+    s.addLayer(
+        CircleLayer("ends", ENDS_SOURCE).withProperties(
+            PropertyFactory.circleRadius(5f),
+            PropertyFactory.circleColor(hex(RtColors.TextPrimary)),
+            PropertyFactory.circleStrokeColor("#000000"),
+            PropertyFactory.circleStrokeWidth(2f),
+        ),
+    )
+    s.addLayer(
+        CircleLayer("marker", MARKER_SOURCE).withProperties(
+            PropertyFactory.circleRadius(8f),
+            PropertyFactory.circleColor(hex(RtColors.GForce)),
+            PropertyFactory.circleStrokeColor("#000000"),
+            PropertyFactory.circleStrokeWidth(3f),
+        ),
+    )
+}
+
+@Composable
+private fun MapStyleToggle(selected: MapStyle, onSelect: (MapStyle) -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .background(RtColors.Background.copy(alpha = 0.75f), RoundedCornerShape(50))
+            .padding(3.dp),
+    ) {
+        MapStyle.entries.forEach { st ->
+            val isSelected = st == selected
+            Text(
+                st.label,
+                style = RtType.caption,
+                color = if (isSelected) RtColors.OnPrimary else RtColors.TextPrimary,
+                modifier = Modifier
+                    .background(if (isSelected) RtColors.Primary else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(50))
+                    .selectable(selected = isSelected, role = Role.Tab, onClick = { onSelect(st) })
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
             )
         }
     }
